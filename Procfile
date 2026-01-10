@@ -1,0 +1,1 @@
+web: cd backend && gunicorn app.main:app -k uvicorn.workers.UvicornWorker
