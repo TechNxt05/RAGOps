@@ -26,8 +26,8 @@ async def send_message(
     project_id: int = None,
     session_id: int = None,
     temperature: float = 0.1,
-    model_provider: str = "google",
-    model_name: str = "gemini-1.5-flash", 
+    model_provider: str = "groq",
+    model_name: str = "llama-3.3-70b-versatile", 
     history_limit: int = 5,
     project_context_limit: int = 2, # Number of *other* conversations to consider
     title: str = None,

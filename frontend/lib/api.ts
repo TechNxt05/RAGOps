@@ -146,7 +146,7 @@ export const debugSearch = async (data: DebugSearchRequest) => {
 };
 
 
-export const sendMessage = async (content: string, projectId?: number, sessionId?: number, temp?: number, modelProvider: string = "gemini", modelName: string = "gemini-1.5-flash", historyLimit: number = 5, projectContextLimit: number = 2, title?: string) => {
+export const sendMessage = async (content: string, projectId?: number, sessionId?: number, temp?: number, modelProvider: string = "groq", modelName: string = "llama-3.3-70b-versatile", historyLimit: number = 5, projectContextLimit: number = 2, title?: string) => {
   const response = await api.post('/chat/message', null, {
     params: {
       content,

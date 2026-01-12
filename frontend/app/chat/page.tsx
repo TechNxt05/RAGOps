@@ -44,8 +44,8 @@ export default function ChatPage() {
     const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
     // Model Config State - Default to Google (Gemini) for better tool support
-    const [modelProvider, setModelProvider] = useState<string>('google');
-    const [modelName, setModelName] = useState<string>('gemini-1.5-flash');
+    const [modelProvider, setModelProvider] = useState<string>('groq');
+    const [modelName, setModelName] = useState<string>('llama-3.3-70b-versatile');
     const [temperature, setTemperature] = useState<number[]>([0.1]);
     const [historyLimit, setHistoryLimit] = useState<number[]>([5]);
     const [projectContextLimit, setProjectContextLimit] = useState<number[]>([2]);
