@@ -3,24 +3,18 @@ from typing import List
 from datetime import datetime
 from sqlmodel import Session, select
 from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from app.models.rag import RAGConfig, Document, Chunk
-from app.db import get_session
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-# Global FAISS index (in-memory loaded + disk)
-# On Railway, disk is ephemeral, so we ideally rebuild on startup or use a volume.
-# For this implementation, we will rebuild from DB chunks on startup if valid, 
-# or just rely on the 'all documents processed' state.
-# But "Re-index required" implies we might destroy and recreate.
-
-VECTOR_STORE_PATH = "faiss_index"
+# ...
 
 class RAGEngine:
     def __init__(self, session: Session):
         self.session = session
-        # Use Local Embeddings to avoid Quota issues
-        self.embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        # Use Google Gemini Embeddings to save memory on free tier
+        self.embeddings = GoogleGenerativeAIEmbeddings(
+            model="models/embedding-001", 
+            google_api_key=os.getenv("GEMINI_API_KEY")
+        )
         
     def get_active_config(self, project_id: int) -> RAGConfig:
         config = self.session.exec(select(RAGConfig).where(RAGConfig.project_id == project_id).where(RAGConfig.is_active == True)).first()
