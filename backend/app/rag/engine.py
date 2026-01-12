@@ -4,6 +4,10 @@ from datetime import datetime
 from sqlmodel import Session, select
 from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from app.models.rag import RAGConfig, Document, Chunk
+
+VECTOR_STORE_PATH = "faiss_index"
 
 # ...
 
