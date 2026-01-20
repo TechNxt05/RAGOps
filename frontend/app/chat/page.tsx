@@ -207,7 +207,6 @@ export default function ChatPage() {
 
             const botMsg: Message = {
                 role: 'assistant',
-                role: 'assistant',
                 content: res.content,
                 sources: sources,
                 usage_metadata: res.usage_metadata
