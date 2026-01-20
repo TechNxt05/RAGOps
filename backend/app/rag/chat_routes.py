@@ -16,12 +16,13 @@ from app.mcp.schemas import MCPContext
 from app.mcp.registry import MCPRegistry
 import os
 import json
+from app.models.usage import TokenUsage
+from app.utils.cost import calculate_cost
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 @router.post("/message")
-async def send_message(
     content: str,
     project_id: int = None,
     session_id: int = None,
@@ -29,7 +30,8 @@ async def send_message(
     model_provider: str = "groq",
     model_name: str = "llama-3.3-70b-versatile", 
     history_limit: int = 5,
-    project_context_limit: int = 2, # Number of *other* conversations to consider
+    project_context_limit: int = 2, # DEPRECATED in favor of explicit IDs, keeping for backward compat
+    context_session_ids: List[int] = [], # NEW: Explicit list of sessions to use as context
     title: str = None,
     session_db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
@@ -87,31 +89,43 @@ async def send_message(
 
     # 4. Retrieve Cross-Session Context (Other Conversations)
     other_context_str = ""
-    if project_context_limit > 0:
-        other_sessions = session_db.exec(
+    
+    # 4a. Use Explicit IDs if provided
+    context_sessions = []
+    if context_session_ids:
+        # Fetch verified sessions belonging to this user/project
+        context_sessions = session_db.exec(
+            select(ChatSession)
+            .where(ChatSession.id.in_(context_session_ids))
+            .where(ChatSession.user_id == current_user.id)
+            .where(ChatSession.id != session_id)
+        ).all()
+    # 4b. Fallback to Limit if no IDs provided (and limit > 0)
+    elif project_context_limit > 0:
+        context_sessions = session_db.exec(
             select(ChatSession)
             .where(ChatSession.project_id == project_id)
             .where(ChatSession.id != session_id) # Exclude current session
             .order_by(ChatSession.created_at.desc())
             .limit(project_context_limit)
         ).all()
-        
-        if other_sessions:
-            other_context_str = "\n\n### RELATED PROJECT CHATS (CONTEXT):\n"
-            for osess in other_sessions:
-                # Fetch last 3 messages from this other session to give context
-                osess_msgs = session_db.exec(
-                    select(Message)
-                    .where(Message.session_id == osess.id)
-                    .order_by(Message.created_at.desc())
-                    .limit(3)
-                ).all()
-                osess_msgs = sorted(osess_msgs, key=lambda m: m.created_at)
-                
-                if osess_msgs:
-                    other_context_str += f"- Chat '{osess.title}':\n"
-                    for m in osess_msgs:
-                        other_context_str += f"  {m.role.upper()}: {m.content[:200]}...\n" # Truncate for token efficiency
+
+    if context_sessions:
+        other_context_str = "\n\n### RELATED PROJECT CHATS (CONTEXT):\n"
+        for osess in context_sessions:
+            # Fetch last 3 messages from this other session to give context
+            osess_msgs = session_db.exec(
+                select(Message)
+                .where(Message.session_id == osess.id)
+                .order_by(Message.created_at.desc())
+                .limit(3)
+            ).all()
+            osess_msgs = sorted(osess_msgs, key=lambda m: m.created_at)
+            
+            if osess_msgs:
+                other_context_str += f"- Chat '{osess.title}':\n"
+                for m in osess_msgs:
+                    other_context_str += f"  {m.role.upper()}: {m.content[:200]}...\n" # Truncate for token efficiency
 
     # 5. Initialize MCP Server & Context
     mcp_context = MCPContext(
@@ -210,15 +224,68 @@ async def send_message(
     except Exception as e:
         answer = f"Error during processing: {str(e)}"
         
-    # 10. Store Assistant Message
+    # 10. Store Assistant Message with Metadata
+    
+    # Gather Metadata
+    usage_metadata = {
+        "model": model_name,
+        "provider": model_provider,
+        "temperature": temperature,
+        "history_limit": history_limit,
+        "rag_config": {
+            "chunk_size": rag_config.chunk_size,
+            "chunk_overlap": rag_config.chunk_overlap,
+            "similarity_threshold": getattr(rag_config, "similarity_threshold", 0.0), # Handle if field missing in older models
+            "max_tokens": rag_config.max_tokens or 4096,
+            "response_style": rag_config.response_style
+        },
+        "embeddings": "Google Gemini (embedding-001)", # Hardcoded as per engine.py
+        "context_used": [s.title for s in context_sessions] if context_sessions else "None",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
     assistant_msg = Message(
         session_id=session_id, 
         role="assistant", 
         content=answer, 
-        sources="[]" 
+        sources="[]",
+        usage_metadata=usage_metadata
     )
     session_db.add(assistant_msg)
     session_db.commit()
+
+    # 10b. Track Usage & Cost
+    try:
+        # LangChain Usage Metadata (if available) - typically in result.response_metadata['token_usage']
+        # For Tool Agents, it might be in intermediate steps or aggregated.
+        # Fallback estimation: 1 token ~= 4 chars
+        input_est = len(system_prompt) + len(content) + len(other_context_str) 
+        output_est = len(answer)
+        
+        # Try to get real usage if possible (Provider dependent)
+        # Note: AgentExecutor output doesn't always bubble up token usage easily without callbacks.
+        # We will use character-based fallback for now unless we switch to explicit LLM calls.
+        i_tokens = int(input_est / 4)
+        o_tokens = int(output_est / 4)
+        
+        cost = calculate_cost(model_name, model_provider, i_tokens, o_tokens)
+        
+        usage_record = TokenUsage(
+            project_id=project_id,
+            user_id=current_user.id,
+            session_id=session_id,
+            model=model_name,
+            provider=model_provider,
+            input_tokens=i_tokens,
+            output_tokens=o_tokens,
+            total_tokens=i_tokens + o_tokens,
+            cost=cost
+        )
+        session_db.add(usage_record)
+        session_db.commit()
+    except Exception as e:
+        print(f"Error tracking usage: {e}")
+
 
     # 11. Auto-Title for New Sessions
     if is_new_session and not title:
@@ -241,7 +308,8 @@ async def send_message(
         "session_id": session_id,
         "role": "assistant", 
         "content": answer,
-        "sources": []
+        "sources": [],
+        "usage_metadata": usage_metadata
     }
 
 @router.get("/sessions")

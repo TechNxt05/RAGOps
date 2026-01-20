@@ -25,7 +25,7 @@ app.add_middleware(
 
 from app.db import init_db
 from app.auth import routes as auth_routes
-from app.rag import config_routes, ingest_routes, chat_routes, project_routes, inspector_routes
+from app.rag import config_routes, ingest_routes, chat_routes, project_routes, inspector_routes, play_routes, analytics_routes
 
 @app.on_event("startup")
 def on_startup():
@@ -39,6 +39,8 @@ app.include_router(config_routes.router)
 app.include_router(ingest_routes.router)
 app.include_router(chat_routes.router)
 app.include_router(inspector_routes.router, prefix="/rag")
+app.include_router(play_routes.router)
+app.include_router(analytics_routes.router)
 
 @app.get("/")
 def read_root():

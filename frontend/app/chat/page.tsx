@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, Bot, User as UserIcon, FileText, Settings, Folder, ChevronRight, Menu, MessageSquare, Trash2, Plus } from 'lucide-react';
+import { Send, Bot, User as UserIcon, FileText, Settings, Folder, ChevronRight, Menu, MessageSquare, Trash2, Plus, Info, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -16,6 +16,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface Source {
     source: string;
@@ -26,6 +29,7 @@ interface Message {
     role: 'user' | 'assistant';
     content: string;
     sources?: Source[] | string;
+    usage_metadata?: any;
 }
 
 export default function ChatPage() {
@@ -48,7 +52,8 @@ export default function ChatPage() {
     const [modelName, setModelName] = useState<string>('llama-3.3-70b-versatile');
     const [temperature, setTemperature] = useState<number[]>([0.1]);
     const [historyLimit, setHistoryLimit] = useState<number[]>([5]);
-    const [projectContextLimit, setProjectContextLimit] = useState<number[]>([2]);
+    // const [projectContextLimit, setProjectContextLimit] = useState<number[]>([2]); // Replaced by manual selection
+    const [selectedContextSessions, setSelectedContextSessions] = useState<number[]>([]);
 
     // Sessions State
     const [sessions, setSessions] = useState<{ id: number, title: string, created_at: string, settings?: any }[]>([]);
@@ -149,7 +154,7 @@ export default function ChatPage() {
             const uiMsgs: Message[] = msgs.map((m: any) => ({
                 role: m.role,
                 content: m.content,
-                sources: m.sources && m.sources !== "[]" ? JSON.parse(m.sources) : undefined
+                usage_metadata: m.usage_metadata
             }));
             setMessages(uiMsgs);
             setSessionId(sid);
@@ -167,7 +172,7 @@ export default function ChatPage() {
                 if (settings.model_name) setModelName(settings.model_name);
                 if (settings.temperature) setTemperature([settings.temperature]);
                 if (settings.history_limit) setHistoryLimit([settings.history_limit]);
-                if (settings.project_context_limit) setProjectContextLimit([settings.project_context_limit]);
+                // if (settings.project_context_limit) setProjectContextLimit([settings.project_context_limit]);
             }
 
         } catch (e) { toast.error("Failed to load chat"); }
@@ -191,7 +196,8 @@ export default function ChatPage() {
                 modelProvider,
                 modelName,
                 historyLimit[0],
-                projectContextLimit[0],
+                0, // projectContextLimit deprecated
+                selectedContextSessions,
                 pendingChatTitle || undefined
             );
 
@@ -202,8 +208,10 @@ export default function ChatPage() {
 
             const botMsg: Message = {
                 role: 'assistant',
+                role: 'assistant',
                 content: res.content,
-                sources: sources
+                sources: sources,
+                usage_metadata: res.usage_metadata
             };
 
             setMessages(prev => [...prev, botMsg]);
@@ -432,17 +440,33 @@ export default function ChatPage() {
                                     <p className="text-[10px] text-muted-foreground">Number of previous messages to remember.</p>
 
                                     <div className="flex items-center justify-between pt-2 border-t">
-                                        <Label>Project Context</Label>
-                                        <span className="text-sm text-muted-foreground">{projectContextLimit[0]} chats</span>
+                                        <Label>Context Selection</Label>
+                                        <span className="text-xs text-muted-foreground">{selectedContextSessions.length} selected</span>
                                     </div>
-                                    <Slider
-                                        defaultValue={[2]}
-                                        max={10}
-                                        step={1}
-                                        value={projectContextLimit}
-                                        onValueChange={setProjectContextLimit}
-                                    />
-                                    <p className="text-[10px] text-muted-foreground">Inject context from other chats.</p>
+                                    <div className="max-h-32 overflow-y-auto space-y-1 border rounded-md p-2 bg-muted/20">
+                                        {sessions.filter(s => s.id !== sessionId).map(s => (
+                                            <div key={s.id} className="flex items-center space-x-2">
+                                                <Checkbox
+                                                    id={`ctx-${s.id}`}
+                                                    checked={selectedContextSessions.includes(s.id)}
+                                                    onCheckedChange={(checked) => {
+                                                        if (checked) setSelectedContextSessions(prev => [...prev, s.id]);
+                                                        else setSelectedContextSessions(prev => prev.filter(id => id !== s.id));
+                                                    }}
+                                                />
+                                                <label
+                                                    htmlFor={`ctx-${s.id}`}
+                                                    className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 truncate"
+                                                >
+                                                    {s.title || `Session ${s.id}`}
+                                                </label>
+                                            </div>
+                                        ))}
+                                        {sessions.filter(s => s.id !== sessionId).length === 0 && (
+                                            <p className="text-[10px] text-muted-foreground">No other chats to use as context.</p>
+                                        )}
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground">Select other chats to influence this answer.</p>
                                 </div>
                                 {projectConfig && (
                                     <>
@@ -500,6 +524,56 @@ export default function ChatPage() {
                                             : 'bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-tl-none'
                                             }`}>
                                             {msg.content}
+
+                                            {msg.role === 'assistant' && msg.usage_metadata && (
+                                                <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+                                                    <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <Button variant="ghost" size="sm" className="h-5 rounded-full text-[10px] px-2 gap-1 text-slate-500 hover:text-indigo-600">
+                                                                <Info className="w-3 h-3" />
+                                                                Gen Info
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-64 p-3">
+                                                            <div className="space-y-2">
+                                                                <h4 className="font-semibold text-xs border-b pb-1 mb-1">Generation Settings</h4>
+                                                                <div className="grid grid-cols-2 gap-y-1 text-xs">
+                                                                    <span className="text-muted-foreground">Model:</span>
+                                                                    <span className="font-mono">{msg.usage_metadata.model}</span>
+
+                                                                    <span className="text-muted-foreground">Temp:</span>
+                                                                    <span className="font-mono">{msg.usage_metadata.temperature}</span>
+
+                                                                    <span className="text-muted-foreground">Provider:</span>
+                                                                    <span className="font-mono">{msg.usage_metadata.provider}</span>
+
+                                                                    <span className="text-muted-foreground">Embeddings:</span>
+                                                                    <span className="font-mono truncate" title={msg.usage_metadata.embeddings}>{msg.usage_metadata.embeddings}</span>
+                                                                </div>
+                                                                <div className="space-y-1 pt-2 border-t">
+                                                                    <span className="text-xs font-semibold text-muted-foreground">RAG Config:</span>
+                                                                    <div className="grid grid-cols-2 gap-y-1 text-xs pl-2">
+                                                                        <span className="text-muted-foreground">Chunk Size:</span>
+                                                                        <span>{msg.usage_metadata.rag_config?.chunk_size}</span>
+                                                                        <span className="text-muted-foreground">Overlap:</span>
+                                                                        <span>{msg.usage_metadata.rag_config?.chunk_overlap}</span>
+                                                                        <span className="text-muted-foreground">Top K:</span>
+                                                                        <span>{msg.usage_metadata.rag_config?.similarity_threshold ? `> ${msg.usage_metadata.rag_config.similarity_threshold}` : "Default"}</span>
+                                                                    </div>
+                                                                </div>
+                                                                {msg.usage_metadata.context_used && msg.usage_metadata.context_used !== "None" && (
+                                                                    <div className="space-y-1 pt-2 border-t">
+                                                                        <span className="text-xs font-semibold text-muted-foreground">Context Used:</span>
+                                                                        <div className="text-[10px] text-slate-600 pl-2">
+                                                                            {Array.isArray(msg.usage_metadata.context_used) ? msg.usage_metadata.context_used.join(", ") : msg.usage_metadata.context_used}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {msg.role === 'assistant' && msg.sources && (Array.isArray(msg.sources) ? msg.sources : []).length > 0 && (

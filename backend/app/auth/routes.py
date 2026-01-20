@@ -13,6 +13,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 class UserCreate(BaseModel):
     email: str
     password: str
+    role: UserRole = UserRole.CLIENT  # Optional, defaults to CLIENT
 
 class Token(BaseModel):
     access_token: str
@@ -25,9 +26,9 @@ def register(user_in: UserCreate, session: Session = Depends(get_session)):
     if user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Default to CLIENT. Admin needs manual DB update or special seed script.
+    # Use the role from user input (defaults to CLIENT if not specified)
     hashed_password = get_password_hash(user_in.password)
-    new_user = User(email=user_in.email, hashed_password=hashed_password, role=UserRole.CLIENT)
+    new_user = User(email=user_in.email, hashed_password=hashed_password, role=user_in.role)
     session.add(new_user)
     session.commit()
     session.refresh(new_user)

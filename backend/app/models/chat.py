@@ -22,3 +22,6 @@ class Message(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     session: Optional[ChatSession] = Relationship(back_populates="messages")
+    
+    # Store full generation config (Model, Temp, Chunk Size, etc.)
+    usage_metadata: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
