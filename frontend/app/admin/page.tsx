@@ -1,24 +1,29 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import {
     getProjects, createProject, getRAGConfig, updateRAGConfig, uploadDocument, getDocuments,
-    getDocumentChunks, debugSearch,
-    Project, RAGConfig, Document, Chunk, DebugSearchResult
+    getDocumentChunks, debugSearch, deleteProject, compareModels,
+    Project, RAGConfig, Document, Chunk, DebugSearchResult, type CompareModelsResponse,
 } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
+import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
-import { Plus, Folder, Settings, Upload, FileText, Info, Search, Database, Layers, Trash2 } from 'lucide-react';
+import { Plus, Folder, Settings, Upload, FileText, Info, Search, Database, Layers, Trash2, BarChart3, Zap, Menu } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import { deleteProject } from '@/lib/api';
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ModelOrchestrator } from '@/components/ModelOrchestrator';
+import { DocumentManagerPanel } from '@/components/DocumentManagerPanel';
 
 export default function AdminDashboard() {
     const { user, logout, isLoading } = useAuth();
@@ -42,6 +47,11 @@ export default function AdminDashboard() {
 
     const [newProjectName, setNewProjectName] = useState("");
     const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const [lastUploadedDocId, setLastUploadedDocId] = useState<number | null>(null);
+    const [compareOpen, setCompareOpen] = useState(false);
+    const [compareQuery, setCompareQuery] = useState("");
+    const [compareLoading, setCompareLoading] = useState(false);
+    const [compareData, setCompareData] = useState<CompareModelsResponse | null>(null);
 
     useEffect(() => {
         if (!isLoading && (!user || user.role !== 'admin')) {
@@ -124,9 +134,10 @@ export default function AdminDashboard() {
         const file = e.target.files[0];
         try {
             toast.info("Uploading to " + selectedProject.name + "...");
-            await uploadDocument(selectedProject.id, file);
-            toast.success("Document processed!");
-            refreshDocuments(); // Fix: Reload documents after upload
+            const res = await uploadDocument(selectedProject.id, file);
+            setLastUploadedDocId(res.doc_id);
+            toast.success("Document queued for processing");
+            refreshDocuments();
         } catch (e) { toast.error("Upload failed."); }
     };
 
@@ -157,7 +168,24 @@ export default function AdminDashboard() {
         }
     }
 
-    if (isLoading || !user) return <div className="flex h-screen items-center justify-center">Loading...</div>;
+    const runCompare = async () => {
+        if (!selectedProject || !compareQuery.trim()) return;
+        setCompareLoading(true);
+        try {
+            const data = await compareModels(selectedProject.id, compareQuery.trim());
+            setCompareData(data);
+        } catch {
+            toast.error("Model comparison failed");
+        } finally {
+            setCompareLoading(false);
+        }
+    };
+
+    if (isLoading || !user) return (
+        <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+            <div className="h-32 w-64 animate-pulse rounded-xl bg-muted" />
+        </div>
+    );
 
     const SettingInfo = ({ text, recommend }: { text: string, recommend: string }) => (
         <div className="text-xs text-muted-foreground mt-1">
@@ -166,55 +194,90 @@ export default function AdminDashboard() {
         </div>
     );
 
+    const projectList = (
+        <>
+            <div className="flex items-center justify-between mb-4">
+                <span className="text-sm font-semibold text-slate-500">PROJECTS</span>
+                <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+                    <DialogTrigger asChild>
+                        <Button variant="ghost" size="sm"><Plus className="w-4 h-4" /></Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Create New Project</DialogTitle>
+                            <DialogDescription>Enter a name for the new project folder.</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <Label>Project Name</Label>
+                            <Input value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} />
+                            <Button onClick={handleCreateProject}>Create</Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            </div>
+
+            <div className="space-y-1 flex-1 overflow-y-auto">
+                {projects.map(p => (
+                    <Button
+                        key={p.id}
+                        variant={selectedProject?.id === p.id ? "secondary" : "ghost"}
+                        className="w-full justify-start gap-2 text-sm"
+                        onClick={() => setSelectedProject(p)}
+                    >
+                        <Folder className="w-4 h-4 shrink-0" />
+                        <span className="truncate">{p.name}</span>
+                    </Button>
+                ))}
+                {projects.length === 0 && (
+                    <div className="text-xs text-muted-foreground text-center py-4">No projects yet</div>
+                )}
+            </div>
+            {selectedProject && (
+                <div className="mt-4 space-y-2">
+                    <Button variant="outline" className="w-full gap-2 text-xs" asChild>
+                        <Link href={`/analytics/${selectedProject.id}`}>
+                            <BarChart3 className="h-4 w-4" />
+                            Analytics
+                        </Link>
+                    </Button>
+                </div>
+            )}
+        </>
+    );
+
     return (
         <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden">
-            {/* Sidebar */}
-            <div className="w-64 bg-white dark:bg-slate-900 border-r flex flex-col p-4">
+            {/* Desktop Sidebar */}
+            <div className="w-64 bg-white dark:bg-slate-900 border-r hidden md:flex flex-col p-4">
                 <div className="flex items-center justify-between mb-8">
-                    <h1 className="font-bold text-xl tracking-tight">RAGOps Admin</h1>
+                    <h1 className="font-bold text-xl tracking-tight text-indigo-600">RAGOps</h1>
                     <Button variant="ghost" size="icon" onClick={logout} title="Logout">
                         <span className="sr-only">Logout</span>
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-log-out w-5 h-5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></svg>
                     </Button>
                 </div>
-
-                <div className="flex items-center justify-between mb-4">
-                    <span className="text-sm font-semibold text-slate-500">PROJECTS</span>
-                    <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                        <DialogTrigger asChild>
-                            <Button variant="ghost" size="sm"><Plus className="w-4 h-4" /></Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                            <DialogHeader>
-                                <DialogTitle>Create New Project</DialogTitle>
-                                <DialogDescription>Enter a name for the new project folder.</DialogDescription>
-                            </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                                <Label>Project Name</Label>
-                                <Input value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} />
-                                <Button onClick={handleCreateProject}>Create</Button>
-                            </div>
-                        </DialogContent>
-                    </Dialog>
-                </div>
-
-                <div className="space-y-1 flex-1 overflow-y-auto">
-                    {projects.map(p => (
-                        <Button
-                            key={p.id}
-                            variant={selectedProject?.id === p.id ? "secondary" : "ghost"}
-                            className="w-full justify-start gap-2"
-                            onClick={() => setSelectedProject(p)}
-                        >
-                            <Folder className="w-4 h-4" />
-                            {p.name}
-                        </Button>
-                    ))}
-                </div>
+                {projectList}
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 p-8 overflow-y-auto">
+            <div className="flex-1 flex flex-col min-w-0">
+                {/* Header for Mobile */}
+                <header className="h-14 border-b bg-white dark:bg-slate-900 flex items-center px-4 md:hidden">
+                    <Sheet>
+                        <SheetTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                                <Menu className="w-5 h-5" />
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent side="left" className="w-64 p-4 flex flex-col">
+                            <div className="mb-8 font-bold text-xl text-indigo-600">RAGOps Admin</div>
+                            {projectList}
+                        </SheetContent>
+                    </Sheet>
+                    <span className="ml-3 font-semibold truncate">{selectedProject?.name || "Admin Panel"}</span>
+                </header>
+
+                <div className="flex-1 p-4 md:p-8 overflow-y-auto">
                 {selectedProject ? (
                     <div className="max-w-6xl mx-auto space-y-6">
                         <div className="flex items-center justify-between">
@@ -254,6 +317,7 @@ export default function AdminDashboard() {
 
                             {/* CONFIG TAB */}
                             <TabsContent value="config">
+                                <ErrorBoundary section="RAG configuration">
                                 <Card>
                                     <CardHeader>
                                         <CardTitle>RAG Settings</CardTitle>
@@ -354,6 +418,54 @@ export default function AdminDashboard() {
                                         </div>
                                     </CardContent>
                                 </Card>
+                                <div className="mt-6 space-y-6">
+                                    <ErrorBoundary section="Model orchestration">
+                                        {selectedProject && <ModelOrchestrator projectId={selectedProject.id} />}
+                                    </ErrorBoundary>
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle className="flex items-center gap-2"><Zap className="w-5 h-5" />Live model comparison</CardTitle>
+                                            <CardDescription>Primary vs fallback models on the same retrieved context (admin).</CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-4">
+                                            <Textarea
+                                                placeholder="e.g. What is our refund policy?"
+                                                value={compareQuery}
+                                                onChange={(e) => setCompareQuery(e.target.value)}
+                                                rows={3}
+                                            />
+                                            <Button type="button" disabled={compareLoading} onClick={() => void runCompare()}>
+                                                {compareLoading ? "Running…" : "Run comparison"}
+                                            </Button>
+                                            {compareData && (
+                                                <div className="space-y-3">
+                                                    <div className="grid gap-4 md:grid-cols-2">
+                                                        <div className="rounded-lg border bg-card p-3 text-sm shadow-sm">
+                                                            <div className="mb-2 font-semibold text-indigo-600">{compareData.left.model}</div>
+                                                            <p className="max-h-48 overflow-y-auto whitespace-pre-wrap text-xs text-muted-foreground">{String(compareData.left.content)}</p>
+                                                            <div className="mt-2 space-y-1 border-t pt-2 text-[11px] text-muted-foreground">
+                                                                <div>Latency: {Math.round(compareData.left.latency_ms)} ms</div>
+                                                                <div>Hallucination risk: {compareData.left.hallucination_score.toFixed(2)}</div>
+                                                                <div>Faithfulness: {compareData.left.faithfulness_score.toFixed(2)}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="rounded-lg border bg-card p-3 text-sm shadow-sm">
+                                                            <div className="mb-2 font-semibold text-violet-600">{compareData.right.model}</div>
+                                                            <p className="max-h-48 overflow-y-auto whitespace-pre-wrap text-xs text-muted-foreground">{String(compareData.right.content)}</p>
+                                                            <div className="mt-2 space-y-1 border-t pt-2 text-[11px] text-muted-foreground">
+                                                                <div>Latency: {Math.round(compareData.right.latency_ms)} ms</div>
+                                                                <div>Hallucination risk: {compareData.right.hallucination_score.toFixed(2)}</div>
+                                                                <div>Faithfulness: {compareData.right.faithfulness_score.toFixed(2)}</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground">Winner: <span className="font-medium text-foreground">{compareData.winner}</span></p>
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                </div>
+                                </ErrorBoundary>
                             </TabsContent>
 
                             {/* FILES TAB */}
@@ -373,26 +485,16 @@ export default function AdminDashboard() {
                                             <Input type="file" onChange={handleFileUpload} className="max-w-xs cursor-pointer" />
                                         </div>
 
-                                        <div className="mt-6 space-y-2">
-                                            <h3 className="font-semibold text-sm text-slate-500">Indexed Files</h3>
-                                            <div className="space-y-2">
-                                                {documents.map(doc => (
-                                                    <div key={doc.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900 rounded border">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className={`p-2 rounded ${doc.processed ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'}`}>
-                                                                <FileText className="w-4 h-4" />
-                                                            </div>
-                                                            <div>
-                                                                <div className="font-medium text-sm">{doc.filename}</div>
-                                                                <div className="text-xs text-muted-foreground">{new Date(doc.uploaded_at).toLocaleDateString()}</div>
-                                                            </div>
-                                                        </div>
-                                                        <span className="text-xs px-2 py-1 bg-white dark:bg-slate-800 border rounded">{doc.processed ? 'Ready' : 'Processing...'}</span>
-                                                    </div>
-                                                ))}
-                                                {documents.length === 0 && <div className="text-sm text-muted-foreground text-center py-4">No documents yet.</div>}
-                                            </div>
-                                        </div>
+                                        <ErrorBoundary section="Documents">
+                                            {selectedProject && (
+                                                <DocumentManagerPanel
+                                                    projectId={selectedProject.id}
+                                                    topK={config.top_k || 4}
+                                                    similarityThreshold={config.similarity_threshold || 0}
+                                                    lastUploadedDocId={lastUploadedDocId}
+                                                />
+                                            )}
+                                        </ErrorBoundary>
                                     </CardContent>
                                 </Card>
                             </TabsContent>
@@ -489,6 +591,7 @@ export default function AdminDashboard() {
                 ) : (
                     <div className="flex h-full items-center justify-center text-muted-foreground">Select a project to manage</div>
                 )}
+                </div>
             </div>
         </div>
     );

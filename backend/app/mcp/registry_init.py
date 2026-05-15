@@ -25,4 +25,4 @@ def register_tools():
         fn=get_document_sources_tool
     )
     
-    print("✅ MCP Tools Registered")
+    print("[SUCCESS] MCP Tools Registered")

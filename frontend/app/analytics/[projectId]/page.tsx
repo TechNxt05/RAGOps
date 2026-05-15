@@ -1,0 +1,269 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { useAuth } from "@/lib/auth-context";
+import { getProjectAnalytics, getProjects, type ProjectAnalytics, type Project } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ArrowLeft, BarChart3 } from "lucide-react";
+
+const COLORS = ["#6366f1", "#22c55e", "#f97316", "#ec4899", "#14b8a6"];
+
+export default function ProjectAnalyticsPage() {
+  const params = useParams();
+  const router = useRouter();
+  const projectId = Number(params.projectId);
+  const { user, isLoading } = useAuth();
+  const [days, setDays] = useState<7 | 30 | 90>(30);
+  const [data, setData] = useState<ProjectAnalytics | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isLoading && (!user || user.role !== "admin")) {
+      if (user && user.role !== "admin") router.replace("/chat");
+      else router.replace("/login");
+    }
+  }, [user, isLoading, router]);
+
+  useEffect(() => {
+    if (user?.role === "admin") {
+      getProjects().then(setProjects).catch(() => {});
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || user.role !== "admin" || !Number.isFinite(projectId)) return;
+    setLoading(true);
+    getProjectAnalytics(projectId, days)
+      .then(setData)
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, [user, projectId, days]);
+
+  if (isLoading || !user || user.role !== "admin") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <div className="h-40 w-full max-w-4xl animate-pulse rounded-xl bg-muted" />
+      </div>
+    );
+  }
+
+  const projectName = projects.find((p) => p.id === projectId)?.name ?? `Project ${projectId}`;
+
+  const pieData =
+    data?.model_breakdown.map((m) => ({
+      name: m.model,
+      value: m.count,
+    })) ?? [];
+
+  const qualityLine =
+    data?.quality_daily.map((d) => ({
+      date: d.date,
+      hallucination: d.avg_hallucination ?? 0,
+      faithfulness: d.avg_faithfulness ?? 0,
+    })) ?? [];
+
+  return (
+    <div className="min-h-screen bg-slate-50 px-4 py-8 dark:bg-slate-950 md:px-10">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <Link
+              href="/admin"
+              className="mb-2 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to admin
+            </Link>
+            <h1 className="flex items-center gap-2 text-2xl font-bold md:text-3xl">
+              <BarChart3 className="h-8 w-8 text-indigo-600" />
+              Analytics — {projectName}
+            </h1>
+          </div>
+          <div className="flex gap-2">
+            {([7, 30, 90] as const).map((d) => (
+              <Button key={d} variant={days === d ? "default" : "outline"} size="sm" onClick={() => setDays(d)}>
+                {d}d
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <ErrorBoundary section="Analytics KPIs">
+          {loading ? (
+            <div className="grid gap-4 md:grid-cols-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-28 animate-pulse rounded-xl bg-muted" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Total queries</CardTitle>
+                </CardHeader>
+                <CardContent className="text-2xl font-bold">{data?.total_queries ?? 0}</CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Avg latency</CardTitle>
+                </CardHeader>
+                <CardContent className="text-2xl font-bold">{Math.round(data?.avg_latency_ms ?? 0)} ms</CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Hallucination risk</CardTitle>
+                </CardHeader>
+                <CardContent className="text-2xl font-bold">
+                  {(data?.avg_hallucination_score ?? 0).toFixed(2)}
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">lower is better</span>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">Citation engagement</CardTitle>
+                </CardHeader>
+                <CardContent className="text-2xl font-bold">
+                  {((data?.citation_engagement_rate ?? 0) * 100).toFixed(0)}%
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </ErrorBoundary>
+
+        <ErrorBoundary section="Charts">
+          {loading ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="h-72 animate-pulse rounded-xl bg-muted" />
+              <div className="h-72 animate-pulse rounded-xl bg-muted" />
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Query volume</CardTitle>
+                </CardHeader>
+                <CardContent className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={data?.daily_volume ?? []}>
+                      <defs>
+                        <linearGradient id="vol" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#6366f1" stopOpacity={0.35} />
+                          <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Area type="monotone" dataKey="count" stroke="#6366f1" fill="url(#vol)" name="Queries" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <div className="grid gap-6 md:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Latency trend</CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={data?.daily_volume ?? []}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                        <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <Tooltip />
+                        <Line type="monotone" dataKey="avg_latency" stroke="#22c55e" dot={false} name="Avg ms" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Model usage</CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={pieData} dataKey="value" nameKey="name" outerRadius={90} label>
+                          {pieData.map((_, i) => (
+                            <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Response quality trend</CardTitle>
+                </CardHeader>
+                <CardContent className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={qualityLine}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                      <YAxis domain={[0, 1]} tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Line
+                        type="monotone"
+                        dataKey="hallucination"
+                        stroke="#ef4444"
+                        dot={false}
+                        name="Hallucination risk"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="faithfulness"
+                        stroke="#3b82f6"
+                        dot={false}
+                        name="Faithfulness"
+                      />
+                      <ReferenceLine
+                        y={0.15}
+                        stroke="#94a3b8"
+                        strokeDasharray="4 4"
+                        label={{ value: "Hallucination target", position: "insideTopRight" }}
+                      />
+                      <ReferenceLine
+                        y={0.8}
+                        stroke="#22c55e"
+                        strokeDasharray="4 4"
+                        label={{ value: "Faithfulness target", position: "insideBottomRight" }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </ErrorBoundary>
+      </div>
+    </div>
+  );
+}

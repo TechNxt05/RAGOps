@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { getProjects, sendMessage, getRAGConfig, getDocuments, getSessions, deleteSession, getHistory, Project, RAGConfig, Document } from '@/lib/api';
+import { getProjects, sendMessage, getRAGConfig, getDocuments, getSessions, deleteSession, getHistory, Project, RAGConfig, Document, trackCitationClick, type ChatMessageResponse, type QualityScores } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, Bot, User as UserIcon, FileText, Settings, Folder, ChevronRight, Menu, MessageSquare, Trash2, Plus, Info, Check } from 'lucide-react';
+import { Send, Bot, User as UserIcon, FileText, Settings, Folder, ChevronRight, Menu, MessageSquare, Trash2, Plus, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -19,6 +19,8 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 interface Source {
     source: string;
@@ -29,7 +31,9 @@ interface Message {
     role: 'user' | 'assistant';
     content: string;
     sources?: Source[] | string;
-    usage_metadata?: any;
+    usage_metadata?: Record<string, unknown>;
+    query_log_id?: number | null;
+    quality?: QualityScores | null;
 }
 
 export default function ChatPage() {
@@ -56,7 +60,9 @@ export default function ChatPage() {
     const [selectedContextSessions, setSelectedContextSessions] = useState<number[]>([]);
 
     // Sessions State
-    const [sessions, setSessions] = useState<{ id: number, title: string, created_at: string, settings?: any }[]>([]);
+    const [sessions, setSessions] = useState<
+        { id: number; title: string; created_at: string; settings?: Record<string, unknown> | string }[]
+    >([]);
 
     // UI State
     useEffect(() => {
@@ -151,28 +157,60 @@ export default function ChatPage() {
         try {
             const msgs = await getHistory(sid);
             // Convert to UI format
-            const uiMsgs: Message[] = msgs.map((m: any) => ({
-                role: m.role,
-                content: m.content,
-                usage_metadata: m.usage_metadata
-            }));
+            const uiMsgs: Message[] = msgs.map((m: { role: string; content: string; usage_metadata?: Record<string, unknown> | null; sources?: string | Source[] | null }) => {
+                let sources: Source[] | undefined;
+                if (m.sources) {
+                    if (typeof m.sources === "string") {
+                        try {
+                            const parsed = JSON.parse(m.sources) as Source[];
+                            sources = Array.isArray(parsed) ? parsed : undefined;
+                        } catch {
+                            sources = undefined;
+                        }
+                    } else if (Array.isArray(m.sources)) {
+                        sources = m.sources;
+                    }
+                }
+                const um = m.usage_metadata;
+                let quality: QualityScores | null | undefined;
+                if (um && typeof um === "object" && um.quality && typeof um.quality === "object") {
+                    const q = um.quality as Record<string, unknown>;
+                    quality = {
+                        hallucination_score: Number(q.hallucination_score),
+                        faithfulness_score: Number(q.faithfulness_score),
+                        overall_quality_score: Number(q.overall_quality_score),
+                        quality_label: String(q.quality_label),
+                    };
+                }
+                return {
+                    role: m.role as "user" | "assistant",
+                    content: m.content,
+                    usage_metadata: um ?? undefined,
+                    sources,
+                    quality: quality ?? undefined,
+                };
+            });
             setMessages(uiMsgs);
             setSessionId(sid);
 
             // Restore Settings from Session if available
             const session = sessions.find(s => s.id === sid);
             if (session?.settings) {
-                // Handle both dict and stringified JSON
-                let settings = session.settings;
-                if (typeof settings === 'string') {
-                    try { settings = JSON.parse(settings); } catch { }
+                let settings: unknown = session.settings;
+                if (typeof settings === "string") {
+                    try {
+                        settings = JSON.parse(settings);
+                    } catch {
+                        settings = null;
+                    }
                 }
-
-                if (settings.model_provider) setModelProvider(settings.model_provider);
-                if (settings.model_name) setModelName(settings.model_name);
-                if (settings.temperature) setTemperature([settings.temperature]);
-                if (settings.history_limit) setHistoryLimit([settings.history_limit]);
-                // if (settings.project_context_limit) setProjectContextLimit([settings.project_context_limit]);
+                if (settings && typeof settings === "object") {
+                    const s = settings as Record<string, unknown>;
+                    if (typeof s.model_provider === "string") setModelProvider(s.model_provider);
+                    if (typeof s.model_name === "string") setModelName(s.model_name);
+                    if (typeof s.temperature === "number") setTemperature([s.temperature]);
+                    if (typeof s.history_limit === "number") setHistoryLimit([s.history_limit]);
+                }
             }
 
         } catch (e) { toast.error("Failed to load chat"); }
@@ -188,7 +226,7 @@ export default function ChatPage() {
 
         try {
             // New Session created with Project ID if sessionId is null
-            const res = await sendMessage(
+            const res: ChatMessageResponse = await sendMessage(
                 userMsg.content,
                 selectedProject.id,
                 sessionId || undefined,
@@ -196,7 +234,7 @@ export default function ChatPage() {
                 modelProvider,
                 modelName,
                 historyLimit[0],
-                0, // projectContextLimit deprecated
+                0,
                 selectedContextSessions,
                 pendingChatTitle || undefined
             );
@@ -209,8 +247,10 @@ export default function ChatPage() {
             const botMsg: Message = {
                 role: 'assistant',
                 content: res.content,
-                sources: sources,
-                usage_metadata: res.usage_metadata
+                sources: sources as Source[] | undefined,
+                usage_metadata: res.usage_metadata ?? undefined,
+                query_log_id: res.query_log_id ?? undefined,
+                quality: res.quality ?? undefined,
             };
 
             setMessages(prev => [...prev, botMsg]);
@@ -360,6 +400,50 @@ export default function ChatPage() {
                                 }
                             </span>
                         </div>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" className="ml-1 hidden gap-2 sm:flex">
+                                    <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" aria-hidden />
+                                    <span className="max-w-[140px] truncate text-xs font-medium">
+                                        {modelProvider === "google" ? "Gemini" : "Groq"} · {modelName}
+                                    </span>
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" className="w-56">
+                                <DropdownMenuItem
+                                    onClick={() => {
+                                        setModelProvider("google");
+                                        setModelName("gemini-1.5-flash");
+                                    }}
+                                >
+                                    Gemini 1.5 Flash
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() => {
+                                        setModelProvider("google");
+                                        setModelName("gemini-1.5-pro");
+                                    }}
+                                >
+                                    Gemini 1.5 Pro
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() => {
+                                        setModelProvider("groq");
+                                        setModelName("llama-3.3-70b-versatile");
+                                    }}
+                                >
+                                    Groq Llama 3.3 70B
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() => {
+                                        setModelProvider("groq");
+                                        setModelName("llama-3.1-8b-instant");
+                                    }}
+                                >
+                                    Groq Llama 3.1 8B
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
 
                     <Popover>
@@ -502,6 +586,7 @@ export default function ChatPage() {
                 </header>
 
                 <div className="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth" ref={scrollRef}>
+                    <ErrorBoundary section="Chat messages">
                     <div className="max-w-3xl mx-auto space-y-6 pb-4">
                         <AnimatePresence initial={false}>
                             {messages.map((msg, i) => (
@@ -538,33 +623,36 @@ export default function ChatPage() {
                                                                 <h4 className="font-semibold text-xs border-b pb-1 mb-1">Generation Settings</h4>
                                                                 <div className="grid grid-cols-2 gap-y-1 text-xs">
                                                                     <span className="text-muted-foreground">Model:</span>
-                                                                    <span className="font-mono">{msg.usage_metadata.model}</span>
+                                                                    <span className="font-mono">{String(msg.usage_metadata.model ?? "")}</span>
 
                                                                     <span className="text-muted-foreground">Temp:</span>
-                                                                    <span className="font-mono">{msg.usage_metadata.temperature}</span>
+                                                                    <span className="font-mono">{String(msg.usage_metadata.temperature ?? "")}</span>
 
                                                                     <span className="text-muted-foreground">Provider:</span>
-                                                                    <span className="font-mono">{msg.usage_metadata.provider}</span>
+                                                                    <span className="font-mono">{String(msg.usage_metadata.provider ?? "")}</span>
 
                                                                     <span className="text-muted-foreground">Embeddings:</span>
-                                                                    <span className="font-mono truncate" title={msg.usage_metadata.embeddings}>{msg.usage_metadata.embeddings}</span>
+                                                                    <span className="font-mono truncate" title={String(msg.usage_metadata.embeddings ?? "")}>{String(msg.usage_metadata.embeddings ?? "")}</span>
                                                                 </div>
                                                                 <div className="space-y-1 pt-2 border-t">
                                                                     <span className="text-xs font-semibold text-muted-foreground">RAG Config:</span>
                                                                     <div className="grid grid-cols-2 gap-y-1 text-xs pl-2">
                                                                         <span className="text-muted-foreground">Chunk Size:</span>
-                                                                        <span>{msg.usage_metadata.rag_config?.chunk_size}</span>
+                                                                        <span>{String((msg.usage_metadata.rag_config as Record<string, unknown> | undefined)?.chunk_size ?? "")}</span>
                                                                         <span className="text-muted-foreground">Overlap:</span>
-                                                                        <span>{msg.usage_metadata.rag_config?.chunk_overlap}</span>
+                                                                        <span>{String((msg.usage_metadata.rag_config as Record<string, unknown> | undefined)?.chunk_overlap ?? "")}</span>
                                                                         <span className="text-muted-foreground">Top K:</span>
-                                                                        <span>{msg.usage_metadata.rag_config?.similarity_threshold ? `> ${msg.usage_metadata.rag_config.similarity_threshold}` : "Default"}</span>
+                                                                        <span>{(msg.usage_metadata.rag_config as Record<string, unknown> | undefined)?.similarity_threshold ? `> ${String((msg.usage_metadata.rag_config as Record<string, unknown>).similarity_threshold)}` : "Default"}</span>
                                                                     </div>
                                                                 </div>
-                                                                {msg.usage_metadata.context_used && msg.usage_metadata.context_used !== "None" && (
+                                                                {msg.usage_metadata.context_used != null &&
+                                                                    String(msg.usage_metadata.context_used) !== "None" && (
                                                                     <div className="space-y-1 pt-2 border-t">
                                                                         <span className="text-xs font-semibold text-muted-foreground">Context Used:</span>
                                                                         <div className="text-[10px] text-slate-600 pl-2">
-                                                                            {Array.isArray(msg.usage_metadata.context_used) ? msg.usage_metadata.context_used.join(", ") : msg.usage_metadata.context_used}
+                                                                            {Array.isArray(msg.usage_metadata.context_used)
+                                                                                ? (msg.usage_metadata.context_used as string[]).join(", ")
+                                                                                : String(msg.usage_metadata.context_used ?? "")}
                                                                         </div>
                                                                     </div>
                                                                 )}
@@ -575,13 +663,47 @@ export default function ChatPage() {
                                             )}
                                         </div>
 
+                                        {msg.role === "assistant" && user.role === "admin" && (() => {
+                                            const raw = msg.quality ?? msg.usage_metadata?.quality;
+                                            if (!raw || typeof raw !== "object") return null;
+                                            const q = raw as QualityScores;
+                                            const overall = q.overall_quality_score;
+                                            const emoji =
+                                                overall > 0.8 ? "🟢" : overall > 0.6 ? "🟡" : overall > 0.4 ? "🟠" : "🔴";
+                                            const warn = overall <= 0.4;
+                                            return (
+                                                <div className="ml-2 text-[11px] text-muted-foreground">
+                                                    <span className="mr-1">{emoji}</span>
+                                                    <span className="font-medium text-foreground">{q.quality_label}</span>
+                                                    <span className="ml-2">
+                                                        Grounding risk: {q.hallucination_score.toFixed(2)} · Faithfulness:{" "}
+                                                        {q.faithfulness_score.toFixed(2)}
+                                                    </span>
+                                                    {warn && (
+                                                        <span className="mt-1 block text-amber-700 dark:text-amber-400">
+                                                            This response may not be fully grounded in your documents.
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+
                                         {msg.role === 'assistant' && msg.sources && (Array.isArray(msg.sources) ? msg.sources : []).length > 0 && (
                                             <div className="flex gap-2 flex-wrap ml-2">
                                                 {(msg.sources as Source[]).map((src, idx) => (
-                                                    <div key={idx} className="flex items-center gap-1 text-[10px] uppercase tracking-wider text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full border">
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        className="flex cursor-pointer items-center gap-1 text-[10px] uppercase tracking-wider text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full border hover:border-indigo-400"
+                                                        onClick={() => {
+                                                            if (msg.query_log_id) {
+                                                                void trackCitationClick(msg.query_log_id, idx);
+                                                            }
+                                                        }}
+                                                    >
                                                         <FileText className="w-3 h-3" />
                                                         <span className="truncate max-w-[120px]">{src.source}</span>
-                                                    </div>
+                                                    </button>
                                                 ))}
                                             </div>
                                         )}
@@ -609,6 +731,7 @@ export default function ChatPage() {
                         )}
                         <div ref={scrollRef} />
                     </div>
+                    </ErrorBoundary>
                 </div>
 
                 {/* Input Area */}

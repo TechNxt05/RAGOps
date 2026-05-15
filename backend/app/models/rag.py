@@ -12,6 +12,13 @@ class Project(SQLModel, table=True):
 class RAGConfig(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     project_id: Optional[int] = Field(default=None, foreign_key="project.id")
+
+    # Model orchestration (defaults match chat UI)
+    primary_llm_provider: str = Field(default="groq")
+    primary_llm_name: str = Field(default="llama-3.3-70b-versatile")
+    fallback_llm_provider: str = Field(default="google")
+    fallback_llm_name: str = Field(default="gemini-1.5-flash")
+    embedding_model: str = Field(default="google-embedding-001")
     
     # Text Splitter Config (Existing)
     chunk_size: int = Field(default=1000)
@@ -49,6 +56,17 @@ class Document(SQLModel, table=True):
     content: str = Field(sa_column_kwargs={"nullable": True})
     uploaded_at: datetime = Field(default_factory=datetime.utcnow)
     processed: bool = Field(default=False)
+
+    file_size_bytes: Optional[int] = None
+    page_count: Optional[int] = None
+    chunk_count: Optional[int] = None
+    chunk_size_used: Optional[int] = None
+    embedding_model_used: Optional[str] = None
+    version: int = Field(default=1)
+    is_active: bool = Field(default=True)
+    processing_status: str = Field(default="pending")
+    processing_error: Optional[str] = None
+    uploaded_by: Optional[int] = Field(default=None, foreign_key="user.id")
 
 class Chunk(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

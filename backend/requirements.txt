@@ -20,3 +20,4 @@ sqlmodel
 pypdf
 sentence-transformers
 langchain-huggingface
+scikit-learn

@@ -36,7 +36,8 @@ async def search_documents_tool(args: SearchDocumentsInput, context: MCPContext)
                 {
                     "content": doc.page_content,
                     "score": score,
-                    "source": doc.metadata.get("source")
+                    "source": doc.metadata.get("source"),
+                    "doc_id": doc.metadata.get("doc_id"),
                 }
                 for doc, score in results
             ]

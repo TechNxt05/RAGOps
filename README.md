@@ -4,8 +4,6 @@
 >
 > *Built with Next.js, FastAPI, LangChain, and PostgreSQL.*
 
-
-
 ## 🚀 Problem Statement
 
 In the rapidly evolving landscape of Generative AI, organizations face three critical challenges when deploying RAG (Retrieval Augmented Generation) solutions:
@@ -14,90 +12,124 @@ In the rapidly evolving landscape of Generative AI, organizations face three cri
 2.  **Hallucination Control**: "Black box" AI systems often answer questions without grounding, leading to misinformation. Admins need control over *what* the AI knows.
 3.  **Lack of Transparency**: Users rarely know *why* an AI gave a specific answer. Was it from the Policy Document v1 or v2?
 
-**RAGOps** solves this by introducing a strict **Project-Based Architecture** with **Admin-Controlled Context**.
+**RAGOps** solves this by introducing a strict **Project-Based Architecture** with **Admin-Controlled Context**, **Multi-Model Orchestration**, and **Built-in Quality Evaluation**.
 
 ---
 
 ## ✨ Key Features
 
-### 1. Project-Based Knowledge Scoping
-*   **Isolation**: Create distinct "Projects" (e.g., *Legal*, *Engineering*, *Marketing*).
-*   **Context Fencing**: Documents uploaded to *Legal* are **never** accessible to the *Engineering* chat bot.
-*   **Granular Config**: Set different RAG parameters (Chunk Size, Overlap, Temperature) per project.
+| Capability | Admin | Client |
+|------------|:-----:|:------:|
+| Upload documents (PDF/TXT) | ✅ | ❌ |
+| Configure RAG params (Chunk size, Top-K, etc.) | ✅ | ❌ |
+| Model orchestration (Primary / Fallback LLM) | ✅ | ❌ |
+| Switch embeddings (Google Cloud / Local HF) | ✅ | ❌ |
+| Session-only model switch (Chat header) | ✅ | ✅ |
+| View analytics dashboard (Usage, Latency, Quality) | ✅ | ❌ |
+| Chat with knowledge base | ✅ | ✅ |
+| View citations & Quality badges | ✅ | ✅ |
+| Citation click analytics | ✅ | ✅ |
+| Re-chunk / delete documents | ✅ | ❌ |
+| Live model comparison (Parallel execution) | ✅ | ❌ |
 
-### 2. Role-Based Access Control (RBAC)
-*   **Admin Role**:
-    *   Full control over Knowledge Base ingestion (PDF/TXT uploads).
-    *   Manage Projects and RAG configurations.
-    *   Inspect specific document chunks and vector scores.
-*   **Client Role**:
-    *   Consumer-facing Chat Interface.
-    *   Can only query active projects.
-    *   Cannot tamper with the underlying knowledge base.
+### Architecture
 
-### 3. Advanced Chat Experience
-*   **Multi-Model Support**: Switch seamlessly between **Google Gemini 1.5** (Cost-effective) and **Groq Llama 3** (High speed).
-*   **Auto-Organized History**: Chat sessions are automatically named and categorized under their respective projects.
-*   **Smart Context**: The AI remembers previous turns and can even pull context from related sessions in the same project.
-*   **Citations**: Every answer includes clickable source badges, showing exactly which document (and file) the information came from.
+```mermaid
+graph TD
+    subgraph Client [User Interface]
+        AdminUI[Admin Panel]
+        ChatUI[Chat Interface]
+        AnalyticsUI[Analytics Dashboard]
+    end
 
-### 4. Admin Inspector & Debugging
-*   **Retrieval Playground**: Test how your documents are being chunked and retrieved before users see them.
-*   **Visual Scoring**: See "Similarity Scores" to tune the vector search precision.
+    subgraph API [FastAPI Backend]
+        Projects[Project Manager]
+        DocIngestion[Document Ingestion]
+        RAGPipeline[RAG Pipeline]
+        EvalLayer[Evaluation Layer]
+        Analytics[Analytics Engine]
+    end
+
+    subgraph AI [AI Layer]
+        Gemini[Gemini 1.5]
+        Groq[Groq LLaMA 3]
+        Embeddings[Gemini / HuggingFace]
+        VectorDB[(FAISS Index)]
+    end
+
+    AdminUI --> Projects
+    AdminUI --> DocIngestion
+    ChatUI --> RAGPipeline
+    AnalyticsUI --> Analytics
+
+    DocIngestion --> Embeddings --> VectorDB
+    RAGPipeline --> VectorDB
+    RAGPipeline --> Gemini
+    RAGPipeline --> Groq
+    RAGPipeline --> EvalLayer
+    EvalLayer --> Analytics
+```
+
+### Evaluation & Reliability Signals
+
+Every assistant turn is logged to `QueryLog` with latency, retrieval counts, and **TF-IDF–based** grounding / faithfulness scores (`backend/app/services/rag_evaluator.py`).
+
+| Metric | Target | Notes |
+|--------|--------|-------|
+| Avg RAG Latency | < 1.5s | Gemini 1.5 Flash / Groq Llama 3 |
+| Avg Grounding Score | > 0.80 | TF-IDF Cosine Similarity |
+| Hallucination Rate | < 10% | Measured via grounding threshold |
+| Embedding Cost | $0.00 | When using local HuggingFace models |
+| Citation Engagement | > 30% | Tracked via admin dashboard |
+
+### Usage Analytics
+
+-   **Collection**: `POST /chat/message` writes a `QueryLog` record per response (background task).
+-   **Engagement**: `POST /api/analytics/citation-click` tracks user interaction with sources.
+-   **Dashboard**: Admin-only `/analytics/[projectId]` features Recharts volume, latency, model mix, and quality trends.
 
 ---
 
 ## 🛠️ Tech Stack
 
 ### Frontend
-*   **Framework**: Next.js 14 (App Router)
+*   **Framework**: Next.js (App Router)
 *   **Styling**: Tailwind CSS + Shadcn UI
+*   **Charts**: Recharts
 *   **State**: React Hooks + Context API
 *   **Animations**: Framer Motion
 
 ### Backend
 *   **API**: FastAPI (Python)
-*   **Database**: PostgreSQL (via SQLModel/Pydantic)
-*   **AI Orchestration**: LangChain
-*   **Embeddings**: Local HuggingFace Models (No API cost for embeddings)
-*   **LLM Providers**: Google Gemini API, Groq API
+*   **Database**: PostgreSQL or **SQLite** (default `sqlite:///./ragops.db`)
+*   **AI Orchestration**: LangChain (Parallel model comparison)
+*   **Embeddings**: **Google Gemini** or **Local HuggingFace MiniLM**
+*   **Vector store**: **FAISS** on disk (`faiss_index/`)
+*   **LLM providers**: Google Gemini, Groq (Llama 3)
+*   **Quality**: scikit-learn TF-IDF engine
+
+### Health
+*   `GET /health` → `{"status":"ok"}`
 
 ---
 
-## ⚡ Deployment
+## ⚡ Local Setup
 
-### Prerequisites
-*   Node.js 18+
-*   Python 3.10+
-*   PostgreSQL Database (Remote or Local)
+**1. Environment** — Copy `.env.example` to `backend/.env` and `frontend/.env.local`.
 
-### 1. Backend Setup
+**2. Backend**
 ```bash
 cd backend
-python -m venv venv
-# Windows: venv\Scripts\activate | Mac/Linux: source venv/bin/activate
 pip install -r requirements.txt
-
-# Create .env file with your keys (DATABASE_URL, GEMINI_API_KEY, etc.)
-python -m app.main
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 2. Frontend Setup
+**3. Frontend**
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-
-### 3. Production Build
-See `deployment_guide.md` for detailed instructions on deploying to **Render** or **Railway**.
-
----
-
-## 🔮 Future Roadmap
-- [ ] Multi-Modal Retrieval (Images/Tables)
-- [ ] Slack/Discord Integration
-- [ ] Team Collaboration (Shared Chat Sessions)
 
 ---
 
