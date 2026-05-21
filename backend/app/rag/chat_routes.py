@@ -47,11 +47,17 @@ class ChatMessageRequest(BaseModel):
     title: Optional[str] = None
 
 
-def _parse_tool_observation(obs: object) -> Tuple[List[str], List[dict]]:
+def _parse_tool_observation(obs: object) -> Tuple[List[str], List[dict], dict]:
     chunks: List[str] = []
     sources: List[dict] = []
+    stats = {
+        "chunks_before_pruning": 0,
+        "chunks_after_pruning": 0,
+        "pruning_reduction_pct": 0.0,
+        "used_hybrid_search": False
+    }
     if obs is None:
-        return chunks, sources
+        return chunks, sources, stats
     if hasattr(obs, "content"):
         obs = getattr(obs, "content")
     if not isinstance(obs, str):
@@ -59,27 +65,38 @@ def _parse_tool_observation(obs: object) -> Tuple[List[str], List[dict]]:
     try:
         data = json.loads(obs)
     except json.JSONDecodeError:
-        return chunks, sources
-    if isinstance(data, dict) and "chunks" in data and isinstance(data["chunks"], list):
-        for ch in data["chunks"]:
-            if isinstance(ch, dict):
-                c = ch.get("content")
-                if c:
-                    chunks.append(str(c))
-                src = ch.get("source")
-                if src:
-                    sources.append(
-                        {
-                            "source": str(src),
-                            "doc_id": int(ch["doc_id"]) if ch.get("doc_id") is not None else 0,
-                        }
-                    )
-    return chunks, sources
+        return chunks, sources, stats
+    if isinstance(data, dict):
+        if "chunks" in data and isinstance(data["chunks"], list):
+            for ch in data["chunks"]:
+                if isinstance(ch, dict):
+                    c = ch.get("content")
+                    if c:
+                        chunks.append(str(c))
+                    src = ch.get("source")
+                    if src:
+                        sources.append(
+                            {
+                                "source": str(src),
+                                "doc_id": int(ch["doc_id"]) if ch.get("doc_id") is not None else 0,
+                            }
+                        )
+        stats["chunks_before_pruning"] = data.get("chunks_before_pruning", 0)
+        stats["chunks_after_pruning"] = data.get("chunks_after_pruning", 0)
+        stats["pruning_reduction_pct"] = data.get("pruning_reduction_pct", 0.0)
+        stats["used_hybrid_search"] = data.get("used_hybrid_search", False)
+    return chunks, sources, stats
 
 
-def _context_from_intermediate_steps(result: dict) -> Tuple[List[str], List[dict]]:
+def _context_from_intermediate_steps(result: dict) -> Tuple[List[str], List[dict], dict]:
     chunks: List[str] = []
     sources: List[dict] = []
+    stats = {
+        "chunks_before_pruning": 0,
+        "chunks_after_pruning": 0,
+        "pruning_reduction_pct": 0.0,
+        "used_hybrid_search": False
+    }
     for step in result.get("intermediate_steps") or []:
         if not isinstance(step, (tuple, list)) or len(step) < 2:
             continue
@@ -90,10 +107,15 @@ def _context_from_intermediate_steps(result: dict) -> Tuple[List[str], List[dict
             tool_name = tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", None)
         if tool_name != "search_documents":
             continue
-        c, s = _parse_tool_observation(observation)
+        c, s, st = _parse_tool_observation(observation)
         chunks.extend(c)
         sources.extend(s)
-    return chunks, sources
+        if st:
+            stats["chunks_before_pruning"] = max(stats["chunks_before_pruning"], st.get("chunks_before_pruning", 0))
+            stats["chunks_after_pruning"] = max(stats["chunks_after_pruning"], st.get("chunks_after_pruning", 0))
+            stats["pruning_reduction_pct"] = max(stats["pruning_reduction_pct"], st.get("pruning_reduction_pct", 0.0))
+            stats["used_hybrid_search"] = stats["used_hybrid_search"] or st.get("used_hybrid_search", False)
+    return chunks, sources, stats
 
 
 @router.post("/message")
@@ -310,7 +332,7 @@ async def post_message(
 
     latency_ms = (time.perf_counter() - t0) * 1000.0
 
-    ctx_chunks, src_from_tools = _context_from_intermediate_steps(result if isinstance(result, dict) else {})
+    ctx_chunks, src_from_tools, search_stats = _context_from_intermediate_steps(result if isinstance(result, dict) else {})
     if not ctx_chunks and project_id is not None:
         try:
             cfg = rag_engine.get_active_config(project_id)
@@ -329,6 +351,12 @@ async def post_message(
                         "doc_id": int(meta["doc_id"]) if meta.get("doc_id") is not None else 0,
                     }
                 )
+            search_stats = {
+                "chunks_before_pruning": getattr(raw, "chunks_before_pruning", 0),
+                "chunks_after_pruning": getattr(raw, "chunks_after_pruning", 0),
+                "pruning_reduction_pct": getattr(raw, "pruning_reduction_pct", 0.0),
+                "used_hybrid_search": getattr(raw, "used_hybrid_search", False),
+            }
         except Exception:
             pass
 
@@ -411,6 +439,10 @@ async def post_message(
         context_chunks_json=json.dumps(ctx_chunks[:50]),
         hallucination_score=float(sync_scores["hallucination_score"]),
         faithfulness_score=float(sync_scores["faithfulness_score"]),
+        chunks_before_pruning=search_stats.get("chunks_before_pruning", 0),
+        chunks_after_pruning=search_stats.get("chunks_after_pruning", 0),
+        pruning_reduction_pct=search_stats.get("pruning_reduction_pct", 0.0),
+        used_hybrid_search=search_stats.get("used_hybrid_search", False),
     )
     session_db.add(qlog)
     session_db.commit()

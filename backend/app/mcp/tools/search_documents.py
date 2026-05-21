@@ -40,5 +40,9 @@ async def search_documents_tool(args: SearchDocumentsInput, context: MCPContext)
                     "doc_id": doc.metadata.get("doc_id"),
                 }
                 for doc, score in results
-            ]
+            ],
+            "chunks_before_pruning": getattr(results, "chunks_before_pruning", 0),
+            "chunks_after_pruning": getattr(results, "chunks_after_pruning", 0),
+            "pruning_reduction_pct": getattr(results, "pruning_reduction_pct", 0.0),
+            "used_hybrid_search": getattr(results, "used_hybrid_search", False),
         }

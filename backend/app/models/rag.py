@@ -46,6 +46,10 @@ class RAGConfig(SQLModel, table=True):
     stop_sequences: List[str] = Field(default=[], sa_column=Column(JSON))
     sensitive_topic_guard: List[str] = Field(default=[], sa_column=Column(JSON))
 
+    # Hybrid Search Settings
+    use_hybrid_search: bool = Field(default=True)
+    semantic_weight: float = Field(default=0.6)  # 0.6 semantic, 0.4 BM25
+
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 

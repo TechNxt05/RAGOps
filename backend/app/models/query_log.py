@@ -28,4 +28,10 @@ class QueryLog(SQLModel, table=True):
 
     context_chunks_json: Optional[str] = Field(default=None, sa_column_kwargs={"nullable": True})
 
+    # Retrieval Quality & Hybrid Search logs
+    chunks_before_pruning: Optional[int] = Field(default=0)
+    chunks_after_pruning: Optional[int] = Field(default=0)
+    pruning_reduction_pct: Optional[float] = Field(default=0.0)
+    used_hybrid_search: Optional[bool] = Field(default=False)
+
     created_at: datetime = Field(default_factory=datetime.utcnow)

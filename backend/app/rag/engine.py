@@ -10,9 +10,27 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document as LCDocument
 
-from app.models.rag import RAGConfig, Document, Chunk
+from app.models.rag import RAGConfig, Document, Chunk, Project
+from app.services.bm25_service import bm25_manager
+from app.services.rrf_service import hybrid_search_merge
+from app.services.context_pruner import context_pruner
+from app.services.reranker_service import reranker_service
 
 VECTOR_STORE_PATH = "faiss_index"
+
+
+class SearchResultList(list):
+    """
+    Subclass of list to hold context pruning and hybrid retrieval metadata,
+    allowing existing routing layers to access these statistics without breaking
+    signature compatibility.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.chunks_before_pruning = 0
+        self.chunks_after_pruning = 0
+        self.pruning_reduction_pct = 0.0
+        self.used_hybrid_search = False
 
 
 class RAGEngine:
@@ -55,10 +73,26 @@ class RAGEngine:
         ).all()
         return {int(r) for r in rows if r is not None}
 
+    def _rebuild_bm25_for_project(self, project_id: int) -> None:
+        """Fetches all active chunks for a project and builds the BM25 index."""
+        try:
+            rows = self.session.exec(
+                select(Chunk)
+                .join(Document, Chunk.document_id == Document.id)
+                .where(Document.project_id == project_id)
+                .where(Document.is_active == True)
+                .where(Document.processed == True)
+            ).all()
+            chunks = [chunk.content for chunk in rows]
+            if chunks:
+                bm25_manager.build_index(str(project_id), chunks)
+            else:
+                bm25_manager.delete_index(str(project_id))
+        except Exception as e:
+            logging.error(f"Error rebuilding BM25 index for project {project_id}: {e}")
+
     def rebuild_full_index(self, project_id: Optional[int] = None) -> None:
         """Rebuild FAISS from all chunks belonging to active, processed documents."""
-        # For simplicity in this enterprise version, we rebuild for the specific project's embeddings
-        # If project_id is None, we use default embeddings
         config = None
         if project_id:
             try:
@@ -93,15 +127,23 @@ class RAGEngine:
             )
 
         if not texts:
-            # If no texts left for this project/global, and we are global, clear it.
-            # Otherwise we'd need per-project index files. 
-            # For this MVP+ we'll clear global if texts is empty.
             if os.path.exists(VECTOR_STORE_PATH):
                 shutil.rmtree(VECTOR_STORE_PATH, ignore_errors=True)
+            if project_id:
+                bm25_manager.delete_index(str(project_id))
             return
 
         vector_store = FAISS.from_texts(texts, embeddings, metadatas=metadatas)
         vector_store.save_local(VECTOR_STORE_PATH)
+
+        # Build BM25 index for projects
+        if project_id:
+            self._rebuild_bm25_for_project(project_id)
+        else:
+            projects = self.session.exec(select(Project)).all()
+            for proj in projects:
+                if proj.id:
+                    self._rebuild_bm25_for_project(proj.id)
 
     def process_document(self, document: Document) -> None:
         if not document.project_id:
@@ -133,16 +175,12 @@ class RAGEngine:
             content = document.content or ""
             texts = text_splitter.split_text(content)
 
-            # Check if existing index matches current embedding model
-            # For simplicity, we assume one project = one index for now
-            # In a real enterprise app, we'd use project-specific index paths
             if os.path.exists(VECTOR_STORE_PATH):
                 try:
                     vector_store = FAISS.load_local(
                         VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True
                     )
                 except Exception:
-                    # If loading fails (likely embedding mismatch), we start fresh or should rebuild
                     vector_store = None
             else:
                 vector_store = None
@@ -174,6 +212,9 @@ class RAGEngine:
             document.embedding_model_used = config.embedding_model or "google-embedding-001"
             self.session.add(document)
             self.session.commit()
+
+            # Build BM25 index for the project after processing
+            self._rebuild_bm25_for_project(document.project_id)
         except Exception as exc:
             document.processed = False
             document.processing_status = "failed"
@@ -189,7 +230,7 @@ class RAGEngine:
         self, query: str, project_id: int, k: int = 4, score_threshold: float = 0.0
     ) -> List[Tuple[LCDocument, float]]:
         if not os.path.exists(VECTOR_STORE_PATH):
-            return []
+            return SearchResultList()
             
         try:
             config = self.get_active_config(project_id)
@@ -199,22 +240,65 @@ class RAGEngine:
                 VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True
             )
 
+            # Retrieve candidate pool for hybrid, pruning, and reranking
+            candidate_k = max(k * 5, 20)
+
             results_with_score = vector_store.similarity_search_with_score(
                 query,
-                k=k,
+                k=candidate_k,
                 filter={"project_id": project_id},
             )
 
             inactive = self._inactive_doc_ids(project_id)
-            filtered: List[Tuple[LCDocument, float]] = []
+            semantic_results: List[Tuple[LCDocument, float]] = []
             for doc, score in results_with_score:
                 meta = doc.metadata or {}
                 did = meta.get("doc_id")
                 if did is not None and int(did) in inactive:
                     continue
-                filtered.append((doc, score))
+                semantic_results.append((doc, score))
 
-            return filtered
+            merged_results = []
+            used_hybrid = False
+
+            # If hybrid search is enabled and the index exists, do BM25 + merge
+            if config.use_hybrid_search and bm25_manager.index_exists(str(project_id)):
+                bm25_res = bm25_manager.search(str(project_id), query, top_k=candidate_k)
+                if bm25_res:
+                    merged_results = hybrid_search_merge(
+                        semantic_results=semantic_results,
+                        bm25_results=bm25_res,
+                        semantic_weight=config.semantic_weight,
+                        bm25_weight=1.0 - config.semantic_weight
+                    )
+                    used_hybrid = True
+
+            if not used_hybrid:
+                merged_results = semantic_results
+
+            # Context Pruning (using TF-IDF similarity threshold, default at least 0.1)
+            prune_threshold = max(config.similarity_threshold or 0.0, 0.1)
+            pruned_results, orig_count, pruned_count, reduction_pct = context_pruner.prune(
+                query=query,
+                chunks=merged_results,
+                threshold=prune_threshold
+            )
+
+            # BGE Reranker (re-rank pruned candidates down to target k)
+            final_reranked = reranker_service.rerank(
+                query=query,
+                chunks=pruned_results,
+                top_k=k
+            )
+
+            # Wrap in SearchResultList subclass to carry metadata back to route handlers
+            final_results = SearchResultList(final_reranked)
+            final_results.chunks_before_pruning = orig_count
+            final_results.chunks_after_pruning = pruned_count
+            final_results.pruning_reduction_pct = reduction_pct
+            final_results.used_hybrid_search = used_hybrid
+
+            return final_results
         except Exception as e:
             logging.error(f"Error loading FAISS index: {e}")
-            return []
+            return SearchResultList()

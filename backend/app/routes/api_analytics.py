@@ -57,6 +57,10 @@ def get_project_analytics(
             "avg_hallucination_score": 0.0,
             "avg_faithfulness_score": 0.0,
             "citation_engagement_rate": 0.0,
+            "avg_chunks_before_pruning": 0.0,
+            "avg_chunks_after_pruning": 0.0,
+            "avg_pruning_reduction_pct": 0.0,
+            "hybrid_search_usage_pct": 0.0,
             "daily_volume": [],
             "model_breakdown": [],
             "quality_daily": [],
@@ -123,12 +127,26 @@ def get_project_analytics(
             }
         )
 
+    pruned_before = [int(l.chunks_before_pruning or 0) for l in logs if l.chunks_before_pruning is not None]
+    pruned_after = [int(l.chunks_after_pruning or 0) for l in logs if l.chunks_after_pruning is not None]
+    pruning_reductions = [float(l.pruning_reduction_pct or 0.0) for l in logs if l.pruning_reduction_pct is not None]
+    hybrid_searches = [1 if l.used_hybrid_search else 0 for l in logs]
+
+    avg_before = sum(pruned_before) / len(pruned_before) if pruned_before else 0.0
+    avg_after = sum(pruned_after) / len(pruned_after) if pruned_after else 0.0
+    avg_reduction = sum(pruning_reductions) / len(pruning_reductions) if pruning_reductions else 0.0
+    hybrid_usage_pct = (sum(hybrid_searches) / len(hybrid_searches) * 100.0) if hybrid_searches else 0.0
+
     return {
         "total_queries": total,
         "avg_latency_ms": round(avg_latency, 2),
         "avg_hallucination_score": round(avg_hall, 4),
         "avg_faithfulness_score": round(avg_faith, 4),
         "citation_engagement_rate": round(float(engagement), 4),
+        "avg_chunks_before_pruning": round(avg_before, 2),
+        "avg_chunks_after_pruning": round(avg_after, 2),
+        "avg_pruning_reduction_pct": round(avg_reduction, 2),
+        "hybrid_search_usage_pct": round(hybrid_usage_pct, 2),
         "daily_volume": daily_volume,
         "model_breakdown": model_breakdown,
         "quality_daily": quality_daily,

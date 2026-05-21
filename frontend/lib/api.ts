@@ -34,6 +34,10 @@ export interface RAGConfig {
 
   is_active: boolean;
   created_at?: string;
+
+  // Hybrid Search Config
+  use_hybrid_search?: boolean;
+  semantic_weight?: number;
 }
 
 export interface Document {
@@ -98,6 +102,10 @@ export interface ProjectAnalytics {
   avg_hallucination_score: number;
   avg_faithfulness_score: number;
   citation_engagement_rate: number;
+  avg_chunks_before_pruning: number;
+  avg_chunks_after_pruning: number;
+  avg_pruning_reduction_pct: number;
+  hybrid_search_usage_pct: number;
   daily_volume: { date: string; count: number; avg_latency: number }[];
   model_breakdown: { model: string; count: number; avg_latency: number }[];
   quality_daily: {

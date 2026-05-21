@@ -112,7 +112,7 @@ export default function ProjectAnalyticsPage() {
         <ErrorBoundary section="Analytics KPIs">
           {loading ? (
             <div className="grid gap-4 md:grid-cols-4">
-              {[1, 2, 3, 4].map((i) => (
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
                 <div key={i} className="h-28 animate-pulse rounded-xl bg-muted" />
               ))}
             </div>
@@ -145,6 +145,44 @@ export default function ProjectAnalyticsPage() {
                 </CardHeader>
                 <CardContent className="text-2xl font-bold">
                   {((data?.citation_engagement_rate ?? 0) * 100).toFixed(0)}%
+                </CardContent>
+              </Card>
+
+              {/* Advanced Enterprise Retrieval Layer KPIs */}
+              <Card className="border-indigo-100 bg-indigo-50/20 dark:border-indigo-950 dark:bg-indigo-950/10">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-indigo-700 dark:text-indigo-300">Hybrid Search usage</CardTitle>
+                </CardHeader>
+                <CardContent className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                  {Math.round(data?.hybrid_search_usage_pct ?? 0)}%
+                  <span className="ml-2 text-[10px] font-normal text-muted-foreground">FAISS + BM25</span>
+                </CardContent>
+              </Card>
+              <Card className="border-indigo-100 bg-indigo-50/20 dark:border-indigo-950 dark:bg-indigo-950/10">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-indigo-700 dark:text-indigo-300">Context pruning saving</CardTitle>
+                </CardHeader>
+                <CardContent className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                  {Math.round(data?.avg_pruning_reduction_pct ?? 0)}%
+                  <span className="ml-2 text-[10px] font-normal text-muted-foreground">less LLM tokens</span>
+                </CardContent>
+              </Card>
+              <Card className="border-indigo-100 bg-indigo-50/20 dark:border-indigo-950 dark:bg-indigo-950/10">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-indigo-700 dark:text-indigo-300">Avg chunks retrieved</CardTitle>
+                </CardHeader>
+                <CardContent className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                  {(data?.avg_chunks_before_pruning ?? 0).toFixed(1)}
+                  <span className="ml-2 text-[10px] font-normal text-muted-foreground">before prune</span>
+                </CardContent>
+              </Card>
+              <Card className="border-indigo-100 bg-indigo-50/20 dark:border-indigo-950 dark:bg-indigo-950/10">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-indigo-700 dark:text-indigo-300">Avg chunks sent</CardTitle>
+                </CardHeader>
+                <CardContent className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                  {(data?.avg_chunks_after_pruning ?? 0).toFixed(1)}
+                  <span className="ml-2 text-[10px] font-normal text-muted-foreground">to LLM context</span>
                 </CardContent>
               </Card>
             </div>

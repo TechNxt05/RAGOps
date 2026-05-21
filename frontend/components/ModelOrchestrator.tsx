@@ -8,6 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { getRAGConfig, patchProjectRagConfig, type RAGConfig } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
 
 type Provider = "groq" | "google";
 
@@ -75,6 +76,8 @@ export function ModelOrchestrator({ projectId }: { projectId: number }) {
         fallback_llm_provider: data.fallback_llm_provider || "google",
         fallback_llm_name: data.fallback_llm_name || "gemini-1.5-flash",
         embedding_model: data.embedding_model || "google-embedding-001",
+        use_hybrid_search: data.use_hybrid_search !== undefined ? data.use_hybrid_search : true,
+        semantic_weight: data.semantic_weight !== undefined ? data.semantic_weight : 0.6,
       });
     } catch {
       toast.error("Failed to load model configuration");
@@ -104,6 +107,8 @@ export function ModelOrchestrator({ projectId }: { projectId: number }) {
         chunk_size: cfg.chunk_size,
         top_k: cfg.top_k,
         similarity_threshold: cfg.similarity_threshold,
+        use_hybrid_search: cfg.use_hybrid_search,
+        semantic_weight: cfg.semantic_weight,
       });
       toast.success("Model configuration saved");
     } catch {
@@ -260,6 +265,42 @@ export function ModelOrchestrator({ projectId }: { projectId: number }) {
               step={0.05}
               onValueChange={(v) => setCfg((c) => ({ ...c, similarity_threshold: v[0] }))}
             />
+          </div>
+
+          <div className="rounded-xl border border-indigo-100 dark:border-indigo-950/80 p-4 space-y-4 md:col-span-2">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5 pr-4">
+                <Label className="text-sm font-semibold">Hybrid Search (Lexical + Semantic)</Label>
+                <p className="text-xs text-muted-foreground">
+                  Combines FAISS semantic search meaning-matching and BM25 local lexical keyword-matching using Reciprocal Rank Fusion (RRF).
+                </p>
+              </div>
+              <Switch
+                checked={cfg.use_hybrid_search ?? true}
+                onCheckedChange={(checked) => setCfg((c) => ({ ...c, use_hybrid_search: checked }))}
+              />
+            </div>
+
+            {(cfg.use_hybrid_search ?? true) && (
+              <div className="space-y-2 pt-2 border-t border-indigo-50 dark:border-indigo-900/40">
+                <div className="flex justify-between text-xs">
+                  <span className="font-medium">Fusion Weight Balance</span>
+                  <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
+                    {Math.round((cfg.semantic_weight ?? 0.6) * 100)}% Semantic / {Math.round((1 - (cfg.semantic_weight ?? 0.6)) * 100)}% Lexical
+                  </span>
+                </div>
+                <Slider
+                  value={[cfg.semantic_weight ?? 0.6]}
+                  min={0.1}
+                  max={0.9}
+                  step={0.05}
+                  onValueChange={(v) => setCfg((c) => ({ ...c, semantic_weight: v[0] }))}
+                />
+                <p className="text-[10px] text-muted-foreground pt-1">
+                  Adjust the slider to prioritize conceptual matching (Semantic) or exact keyword matching (Lexical).
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

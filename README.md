@@ -1,137 +1,151 @@
 # RAGOps: Enterprise-Grade RAG Platform
 
-> **Admin-Controlled, Project-Based Retrieval Augmented Generation System**
+> **Admin-Controlled, Project-Based Hybrid Retrieval Augmented Generation System**
 >
-> *Built with Next.js, FastAPI, LangChain, and PostgreSQL.*
-
-## 🚀 Problem Statement
-
-In the rapidly evolving landscape of Generative AI, organizations face three critical challenges when deploying RAG (Retrieval Augmented Generation) solutions:
-
-1.  **Data Isolation & Security**: Generic chatbots lack boundaries. Sensitive HR documents shouldn't mix with casual internal wiki searches.
-2.  **Hallucination Control**: "Black box" AI systems often answer questions without grounding, leading to misinformation. Admins need control over *what* the AI knows.
-3.  **Lack of Transparency**: Users rarely know *why* an AI gave a specific answer. Was it from the Policy Document v1 or v2?
-
-**RAGOps** solves this by introducing a strict **Project-Based Architecture** with **Admin-Controlled Context**, **Multi-Model Orchestration**, and **Built-in Quality Evaluation**.
+> *Built with Next.js, FastAPI, LangChain, pgvector, FAISS, and BGE Cross-Encoder Reranker.*
 
 ---
 
-## ✨ Key Features
+## 🚀 The RAGOps Paradigm
+
+In the modern enterprise, deploying simple vector-search chatbots is insufficient. Organizations encounter three fundamental challenges:
+
+1. **Security & Data Isolation**: Sensitive HR documents must not mingle with general internal wikis. RAGOps introduces strict **Project-Based Isolation** with robust role-based access controls (RBAC).
+2. **Lexical vs. Semantic Precision**: Pure semantic vector searches fail on specific keyword lookups (like invoice numbers or specialized codes), while pure keyword search misses conceptual context. RAGOps solves this using **Sparse/Dense Hybrid Search (FAISS + BM25)** fused via **Reciprocal Rank Fusion (RRF)**.
+3. **Context Noise & Cost**: Feeding massive, redundant chunks to LLMs wastes tokens and dilutes generation quality. RAGOps incorporates a **Deep Cross-Encoder Reranker (BGE-Reranker)** and a **TF-IDF Cosine Similarity Context Pruner** to keep only the highest relevance data.
+
+---
+
+## ✨ Upgraded Enterprise Features
 
 | Capability | Admin | Client |
 |------------|:-----:|:------:|
-| Upload documents (PDF/TXT) | ✅ | ❌ |
-| Configure RAG params (Chunk size, Top-K, etc.) | ✅ | ❌ |
-| Model orchestration (Primary / Fallback LLM) | ✅ | ❌ |
-| Switch embeddings (Google Cloud / Local HF) | ✅ | ❌ |
-| Session-only model switch (Chat header) | ✅ | ✅ |
-| View analytics dashboard (Usage, Latency, Quality) | ✅ | ❌ |
-| Chat with knowledge base | ✅ | ✅ |
-| View citations & Quality badges | ✅ | ✅ |
-| Citation click analytics | ✅ | ✅ |
-| Re-chunk / delete documents | ✅ | ❌ |
-| Live model comparison (Parallel execution) | ✅ | ❌ |
+| **Sparse/Dense Hybrid Search** (FAISS + BM25 + RRF) | ✅ | ❌ (View Config) |
+| **Deep Reranking** (`BAAI/bge-reranker-base`) | ✅ | ❌ (View Config) |
+| **Context Pruning** (TF-IDF Similarity Filter) | ✅ | ❌ (View Config) |
+| Dynamic Semantic-vs-Lexical Weight Configuration | ✅ | ❌ |
+| Switch embeddings (Google Cloud / Local HF MiniLM) | ✅ | ❌ |
+| Live parallel model comparison & chat panel | ✅ | ❌ |
+| Glowing Indigo Analytics Panel (Pruning Savings, Rerank KPIs) | ✅ | ❌ |
+| Chat with project-isolated knowledge bases | ✅ | ✅ |
+| Citation click analytics & source validation | ✅ | ✅ |
 
-### Architecture
+---
+
+## 🔮 Retrieval Architecture
+
+RAGOps features a state-of-the-art multi-stage hybrid search, reranking, and context filtering workflow:
 
 ```mermaid
 graph TD
-    subgraph Client [User Interface]
-        AdminUI[Admin Panel]
-        ChatUI[Chat Interface]
-        AnalyticsUI[Analytics Dashboard]
-    end
-
-    subgraph API [FastAPI Backend]
-        Projects[Project Manager]
-        DocIngestion[Document Ingestion]
-        RAGPipeline[RAG Pipeline]
-        EvalLayer[Evaluation Layer]
-        Analytics[Analytics Engine]
-    end
-
-    subgraph AI [AI Layer]
-        Gemini[Gemini 1.5]
-        Groq[Groq LLaMA 3]
-        Embeddings[Gemini / HuggingFace]
-        VectorDB[(FAISS Index)]
-    end
-
-    AdminUI --> Projects
-    AdminUI --> DocIngestion
-    ChatUI --> RAGPipeline
-    AnalyticsUI --> Analytics
-
-    DocIngestion --> Embeddings --> VectorDB
-    RAGPipeline --> VectorDB
-    RAGPipeline --> Gemini
-    RAGPipeline --> Groq
-    RAGPipeline --> EvalLayer
-    EvalLayer --> Analytics
+    Query(["User Query"]) --> Hybrid{"Hybrid Search Trigger"}
+    Hybrid -->|Dense Semantic| Semantic["FAISS Vector Store (all-MiniLM-L6-v2)"]
+    Hybrid -->|Sparse Lexical| Lexical["BM25 Lexical Index (Project-Isolated)"]
+    Semantic --> RRF["Reciprocal Rank Fusion (RRF)"]
+    Lexical --> RRF
+    RRF --> Rerank["BGE Cross-Encoder Reranker (BAAI/bge-reranker-base)"]
+    Rerank --> Prune["Context Pruner (TF-IDF Cosine Similarity Filter)"]
+    Prune --> Output(["Pruned High-Relevance Chunks (Max Context Window)"])
 ```
 
-### Evaluation & Reliability Signals
+### Retrieval & Pruning Stages
 
-Every assistant turn is logged to `QueryLog` with latency, retrieval counts, and **TF-IDF–based** grounding / faithfulness scores (`backend/app/services/rag_evaluator.py`).
-
-| Metric | Target | Notes |
-|--------|--------|-------|
-| Avg RAG Latency | < 1.5s | Gemini 1.5 Flash / Groq Llama 3 |
-| Avg Grounding Score | > 0.80 | TF-IDF Cosine Similarity |
-| Hallucination Rate | < 10% | Measured via grounding threshold |
-| Embedding Cost | $0.00 | When using local HuggingFace models |
-| Citation Engagement | > 30% | Tracked via admin dashboard |
-
-### Usage Analytics
-
--   **Collection**: `POST /chat/message` writes a `QueryLog` record per response (background task).
--   **Engagement**: `POST /api/analytics/citation-click` tracks user interaction with sources.
--   **Dashboard**: Admin-only `/analytics/[projectId]` features Recharts volume, latency, model mix, and quality trends.
+1. **Sparse Lexical Indexing**: Uses rank-bm25 index isolating indexes per-project and caching indexes on-disk for lightning-fast reads.
+2. **Reciprocal Rank Fusion (RRF)**: Merges dense FAISS vector rankings with sparse BM25 keyword rankings based on adjustable weights.
+3. **BGE Reranking**: Feeds query and top-fused chunks into `BAAI/bge-reranker-base` to compute precise cross-attention relevance scores, reranking chunks for maximum quality.
+4. **TF-IDF Context Pruning**: Employs scikit-learn cosine-similarity vectorizers to filter out duplicate, redundant, or low-scoring context chunks.
 
 ---
 
-## 🛠️ Tech Stack
+## ⚡ Technical Stack
 
-### Frontend
-*   **Framework**: Next.js (App Router)
-*   **Styling**: Tailwind CSS + Shadcn UI
-*   **Charts**: Recharts
-*   **State**: React Hooks + Context API
-*   **Animations**: Framer Motion
+### Frontend (Next.js Standalone)
+* **Framework**: Next.js 15 (App Router, TypeScript)
+* **Styling**: Tailwind CSS + Shadcn UI (Glassmorphic dark design)
+* **Visualizations**: Recharts + Glowing Indigo KPI dashboards
+* **State Management**: React Context API + Custom Hooks
 
-### Backend
-*   **API**: FastAPI (Python)
-*   **Database**: PostgreSQL or **SQLite** (default `sqlite:///./ragops.db`)
-*   **AI Orchestration**: LangChain (Parallel model comparison)
-*   **Embeddings**: **Google Gemini** or **Local HuggingFace MiniLM**
-*   **Vector store**: **FAISS** on disk (`faiss_index/`)
-*   **LLM providers**: Google Gemini, Groq (Llama 3)
-*   **Quality**: scikit-learn TF-IDF engine
-
-### Health
-*   `GET /health` → `{"status":"ok"}`
+### Backend (FastAPI Enterprise)
+* **Framework**: FastAPI (Python 3.11)
+* **Database**: PostgreSQL (pgvector enabled) with robust SQLModel layers
+* **AI Orchestration**: LangChain, Groq (Llama 3.3), Google Gemini
+* **Models Cache**: On-build HuggingFace model cache warming (zero first-request cold-start latency)
+* **Search Engines**: Local FAISS on-disk indexes + Project-isolated BM25 indexes
 
 ---
 
-## ⚡ Local Setup
+## 🐳 Docker Production Setup (Recommended)
 
-**1. Environment** — Copy `.env.example` to `backend/.env` and `frontend/.env.local`.
+RAGOps is fully containerized using Docker and Docker Compose, enabling instant, single-command production deployment with database schema synchronization and warm model downloads pre-cached into backend images.
 
-**2. Backend**
+**Launch the entire RAGOps platform:**
+```bash
+docker-compose up --build
+```
+
+This starts:
+1. **Frontend**: Standalone Next.js production build served on `http://localhost:3000`
+2. **Backend**: FastAPI Uvicorn ASGI server served on `http://localhost:8000`
+3. **Database**: PostgreSQL container equipped with `pgvector` and standard schema migrations triggers
+
+---
+
+## 🛠️ Local Manual Setup
+
+### 1. Environment Configurations
+Rename `.env.example` to `backend/.env` and `frontend/.env.local` and add your LLM API keys:
+```env
+DATABASE_URL=postgresql://neondb_owner:npg_v94oVqhCKZrw@...
+SECRET_KEY=your_secret_key
+GEMINI_API_KEY=AIzaSy...
+GROQ_API_KEY=gsk_...
+```
+
+### 2. Backend Server Installation
 ```bash
 cd backend
+python -m venv venv
+venv\Scripts\activate      # On Windows
+source venv/bin/activate   # On Unix
 pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-**3. Frontend**
+### 3. Frontend Dashboard Installation
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+Open `http://localhost:3000` to interact with the premium enterprise interface!
 
 ---
 
-**Author**: Amritanshu Yadav
+## 🧪 Integration Verification Suite
+
+To guarantee 100% runtime safety, RAGOps includes an end-to-end integration verification suite. It dynamically creates test projects, verifies role-based permissions (blocking unauthorized users with `403 Forbidden` and welcoming admins with `200 OK`), exercises chat session pipelines, and executes clean database cascade deletes.
+
+**Run the verification suite:**
+```bash
+cd backend
+python verify_backend.py
+```
+
+**Verification Results:**
+```text
+[PASS] API Health 
+[PASS] Admin Login Status: 200
+[PASS] Client Login Status: 200
+[PASS] Create Verification Project Status: 200
+[PASS] RBAC Enforcement (Client Blocked) Status: 403
+[PASS] RBAC Enforcement (Admin Allowed) Status: 200
+[PASS] Chat Endpoint Schema Integration Status: 200
+Chat response content successfully returned!
+[PASS] Cleanup Verification Project Status: 200
+```
+
+---
+
+**Author**: Amritanshu Yadav  
 **License**: MIT
+
