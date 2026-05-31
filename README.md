@@ -16,6 +16,21 @@ In the modern enterprise, deploying simple vector-search chatbots is insufficien
 
 ---
 
+## 🌟 Advanced Production Upgrades (May 2026)
+
+RAGOps has been enhanced with five advanced production-grade components designed to optimize retrieval quality, control LLM spend, and supply granular pipeline diagnostics:
+
+1. **Adaptive Chunking Engine (Ekimetrics LREC 2026)**: Rather than naive fixed-size chunking, RAGOps evaluates four candidate chunking strategies (Fixed, Paragraph, Semantic, and Recursive) against 5 intrinsic metrics (size compliance, cohesive density, boundary flow, blocks integrity, and pronoun antecedent coherence) to select the mathematically optimal chunk configuration per-document.
+2. **Pre-Retrieval Query Understanding**: Performs complexity classification (Factoid, Analytical, and Multi-Hop), automatic sub-query decomposition for multi-hop queries, and domain-specific query expansion to prepare optimal search candidates.
+3. **Source Confidence & Hallucination Gate**: Formulates a weighted retrieve-relevance confidence score based on source type authority, chunk-query agreement, and document freshness decay. Generation only proceeds if confidence is $\ge 0.65$, preventing hallucinations by returning a graceful refusal.
+4. **Cost Control Layer**:
+   * **Semantic Query Cache**: A fast TF-IDF cosine-similarity cache that intercepts duplicate/highly similar queries to serve answers instantly.
+   * **Heuristic Heuristic Router**: Smart, low-overhead query routing matching complexity classifications to optimal model sizes (e.g. routing simple factoids to `gemini-1.5-flash` and complex analytical queries to `gemini-1.5-pro`).
+   * **Spend Circuit Breaker**: Implements hourly/daily USD spending caps to safeguard against budget overruns and run-away agents.
+5. **E2E Pipeline Tracing & Timing Metrics**: Deep pipeline tracers track and record execution timing (ms) and success/failure statuses for every retrieval, pruning, and generation stage—viewable inside the interactive Trace Playground.
+
+---
+
 ## ✨ Upgraded Enterprise Features
 
 | Capability | Admin | Client |
