@@ -164,7 +164,7 @@ export function DocumentManagerPanel({
         top_k: topK,
         similarity_threshold: similarityThreshold,
       });
-      setRetrievalResults(res);
+      setRetrievalResults(res.results);
     } catch {
       toast.error("Retrieval test failed");
     }
@@ -280,6 +280,7 @@ export function DocumentManagerPanel({
                     <p className="text-xs text-muted-foreground">
                       {doc.chunk_count != null ? `${doc.chunk_count} chunks` : "—"} · chunk_size=
                       {doc.chunk_size_used ?? "—"} · {doc.embedding_model_used ?? "embeddings —"}
+                      {doc.chunking_strategy ? ` · strategy=${doc.chunking_strategy}` : ""}
                     </p>
                     {busy && (
                       <div className="mt-2 space-y-1">
@@ -343,9 +344,10 @@ export function DocumentManagerPanel({
             <DialogDescription>Preview, chunks, and retrieval test for this document.</DialogDescription>
           </DialogHeader>
           <Tabs defaultValue="text">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="text">Full text</TabsTrigger>
               <TabsTrigger value="chunks">Chunks</TabsTrigger>
+              <TabsTrigger value="adaptive">Adaptive Quality</TabsTrigger>
               <TabsTrigger value="retrieval">Retrieval test</TabsTrigger>
             </TabsList>
             <TabsContent value="text">
@@ -386,6 +388,83 @@ export function DocumentManagerPanel({
                     <p className="whitespace-pre-wrap">{c.content}</p>
                   </div>
                 ))}
+              </ScrollArea>
+            </TabsContent>
+            <TabsContent value="adaptive">
+              <ScrollArea className="mt-2 h-64 space-y-4">
+                {previewDoc?.chunking_strategy ? (
+                  <div className="space-y-4 p-2 text-left">
+                    <div className="flex justify-between items-center bg-indigo-50 dark:bg-indigo-950/40 p-3 rounded-lg border border-indigo-100 dark:border-indigo-900/60">
+                      <div>
+                        <span className="text-xs uppercase text-indigo-500 font-semibold tracking-wider block text-left">Selected Strategy</span>
+                        <span className="font-bold text-sm text-indigo-700 dark:text-indigo-300 block text-left capitalize">{previewDoc.chunking_strategy.replace(/_/g, ' ')}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs uppercase text-indigo-500 font-semibold tracking-wider block text-right">Composite Quality</span>
+                        <span className="font-extrabold text-lg text-indigo-700 dark:text-indigo-300">
+                          {((previewDoc.chunking_metrics?.composite_score ?? 0) * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 text-left">
+                      <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider text-left">Ekimetrics Intrinsic Metrics</h4>
+                      
+                      {[
+                        { label: "Size Compliance (SC)", value: previewDoc.chunking_metrics?.size_compliance, desc: "Fraction of chunks within embedder token limits" },
+                        { label: "Intrachunk Cohesion (ICC)", value: previewDoc.chunking_metrics?.intrachunk_cohesion, desc: "Semantic theme focus within each individual chunk" },
+                        { label: "Contextual Coherence (DCC)", value: previewDoc.chunking_metrics?.contextual_coherence, desc: "Smoothness of flow/overlap between adjacent chunks" },
+                        { label: "Block Integrity (BI)", value: previewDoc.chunking_metrics?.block_integrity, desc: "Ensuring tables, lists, and code blocks are kept intact" },
+                        { label: "Reference Completeness (RC)", value: previewDoc.chunking_metrics?.reference_completeness, desc: "Keeping pronoun-antecedent entity pairs in same chunk" }
+                      ].map((m, idx) => (
+                        <div key={idx} className="space-y-1 text-left">
+                          <div className="flex justify-between text-xs font-medium">
+                            <span className="text-foreground">{m.label}</span>
+                            <span className="font-mono text-muted-foreground">{((m.value ?? 0) * 100).toFixed(1)}%</span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full" 
+                              style={{ width: `${Math.max(0, Math.min(100, (m.value ?? 0) * 100))}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-muted-foreground leading-none block text-left">{m.desc}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {previewDoc.chunking_metrics?.all_strategy_scores && (
+                      <div className="space-y-2 pt-2 text-left">
+                        <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider text-left">Candidate Strategies Comparison</h4>
+                        <div className="border rounded-md overflow-hidden text-xs">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-muted text-muted-foreground font-medium text-[10px] uppercase border-b">
+                                <th className="p-2">Strategy</th>
+                                <th className="p-2 text-center">Chunks</th>
+                                <th className="p-2 text-right">Composite Score</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {Object.entries(previewDoc.chunking_metrics.all_strategy_scores).map(([sName, sData], sIdx) => (
+                                <tr key={sIdx} className={`border-b last:border-0 ${sName === previewDoc.chunking_strategy ? 'bg-indigo-50/30 dark:bg-indigo-950/20 font-semibold text-indigo-600 dark:text-indigo-400' : 'text-muted-foreground'}`}>
+                                  <td className="p-2 capitalize">{sName.replace(/_/g, ' ')}</td>
+                                  <td className="p-2 text-center">{sData.chunk_count}</td>
+                                  <td className="p-2 text-right font-mono">{(sData.composite * 100).toFixed(1)}%</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-10 text-muted-foreground text-xs space-y-2">
+                    <p className="font-medium text-foreground">Legacy Index Segment</p>
+                    <p>This document was indexed before Adaptive Chunking was deployed. Click "Re-chunk" to apply the new multi-candidate structural evaluator!</p>
+                  </div>
+                )}
               </ScrollArea>
             </TabsContent>
             <TabsContent value="retrieval">

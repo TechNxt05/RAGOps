@@ -57,6 +57,24 @@ export interface Document {
   processing_status?: string;
   processing_error?: string | null;
   uploaded_by?: number | null;
+  chunking_strategy?: string | null;
+  chunking_metrics?: {
+    composite_score: number;
+    size_compliance: number;
+    intrachunk_cohesion: number;
+    contextual_coherence: number;
+    block_integrity: number;
+    reference_completeness: number;
+    all_strategy_scores: Record<string, {
+      composite: number;
+      size_compliance: number;
+      intrachunk_cohesion: number;
+      contextual_coherence: number;
+      block_integrity: number;
+      reference_completeness: number;
+      chunk_count: number;
+    }>;
+  } | null;
 }
 
 export interface Chunk {
@@ -251,8 +269,14 @@ export const getDocumentChunks = async (documentId: number) => {
   return response.data;
 };
 
-export const debugSearch = async (data: DebugSearchRequest) => {
-  const response = await api.post<DebugSearchResult[]>('/rag/inspector/search', data);
+export interface DebugSearchResponse {
+  results: DebugSearchResult[];
+  query_analysis?: Record<string, any> | null;
+  pipeline_trace?: Record<string, any> | null;
+}
+
+export const debugSearch = async (data: DebugSearchRequest): Promise<DebugSearchResponse> => {
+  const response = await api.post<DebugSearchResponse>('/rag/inspector/search', data);
   return response.data;
 };
 

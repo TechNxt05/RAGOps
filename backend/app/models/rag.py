@@ -72,6 +72,9 @@ class Document(SQLModel, table=True):
     processing_error: Optional[str] = None
     uploaded_by: Optional[int] = Field(default=None, foreign_key="user.id")
 
+    chunking_strategy: Optional[str] = Field(default=None)
+    chunking_metrics: Optional[dict] = Field(default=None, sa_column=Column(JSON))
+
 class Chunk(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     document_id: Optional[int] = Field(default=None, foreign_key="document.id")

@@ -1,6 +1,7 @@
 from sqlmodel import SQLModel, Field
 from typing import Optional
 from datetime import datetime
+from sqlalchemy import Column, JSON
 
 
 class QueryLog(SQLModel, table=True):
@@ -33,5 +34,8 @@ class QueryLog(SQLModel, table=True):
     chunks_after_pruning: Optional[int] = Field(default=0)
     pruning_reduction_pct: Optional[float] = Field(default=0.0)
     used_hybrid_search: Optional[bool] = Field(default=False)
+
+    # Failure tracing & pipeline details
+    pipeline_trace: Optional[dict] = Field(default=None, sa_column=Column(JSON))
 
     created_at: datetime = Field(default_factory=datetime.utcnow)

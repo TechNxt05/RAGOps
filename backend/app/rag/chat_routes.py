@@ -30,6 +30,7 @@ from app.mcp.server import MCPServer
 from app.rag.engine import RAGEngine
 from app.services.rag_evaluator import evaluate_rag_response
 from app.utils.cost import calculate_cost
+from app.services.cost_control import get_cost_manager
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -124,6 +125,7 @@ async def post_message(
     session_db: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
+    t0_overall = time.time()
     content = req.content
     project_id = req.project_id
     session_id = req.session_id
@@ -168,6 +170,102 @@ async def post_message(
     user_msg = Message(session_id=session_id, role="user", content=content)
     session_db.add(user_msg)
     session_db.commit()
+
+    # 1. Cost Control Pre-Call (Cache & Circuit Breaker & Routing)
+    cost_manager = get_cost_manager()
+    pre = cost_manager.pre_call(content)
+    
+    if pre["source"] == "cache":
+        answer = pre["response"]
+        latency_ms = (time.time() - t0_overall) * 1000.0
+        
+        usage_metadata = {
+            "model": model_name,
+            "provider": model_provider,
+            "temperature": temperature,
+            "history_limit": history_limit,
+            "embeddings": "Google Gemini (embedding-001)",
+            "context_used": "Cache Hit",
+            "timestamp": datetime.utcnow().isoformat(),
+            "quality": {
+                "hallucination_score": 0.0,
+                "faithfulness_score": 1.0,
+                "overall_quality_score": 1.0,
+                "quality_label": "Excellent (Cached)"
+            },
+            "cost_control": {
+                "source": "cache",
+                "cost_saved_usd": 0.002
+            }
+        }
+        
+        assistant_msg = Message(
+            session_id=session_id,
+            role="assistant",
+            content=answer,
+            sources="[]",
+            usage_metadata=usage_metadata
+        )
+        session_db.add(assistant_msg)
+        session_db.commit()
+        session_db.refresh(assistant_msg)
+        
+        qlog = QueryLog(
+            project_id=project_id,
+            user_id=current_user.id,
+            session_id=session_id,
+            query_text=content,
+            response_text=answer,
+            model_used=f"{model_provider}/{model_name} (Cached)",
+            latency_ms=latency_ms,
+            chunks_retrieved=0,
+            tokens_used=0,
+            citations_shown=0,
+            citations_clicked=0,
+            context_chunks_json="[]",
+            hallucination_score=0.0,
+            faithfulness_score=1.0,
+            chunks_before_pruning=0,
+            chunks_after_pruning=0,
+            pruning_reduction_pct=0.0,
+            used_hybrid_search=False,
+            pipeline_trace={
+                "query": content,
+                "status": "success",
+                "total_duration_ms": latency_ms,
+                "stages": {
+                    "semantic_cache": {
+                        "stage": "semantic_cache",
+                        "status": "success",
+                        "duration_ms": latency_ms,
+                        "metadata": {"cache_hit": True}
+                    }
+                }
+            }
+        )
+        session_db.add(qlog)
+        session_db.commit()
+        session_db.refresh(qlog)
+        
+        return {
+            "session_id": session_id,
+            "role": "assistant",
+            "content": answer,
+            "sources": [],
+            "usage_metadata": usage_metadata,
+            "query_log_id": qlog.id,
+            "quality": usage_metadata["quality"]
+        }
+        
+    elif pre["source"] == "blocked":
+        raise HTTPException(status_code=503, detail="Cost circuit breaker tripped. Hourly/daily spending limit reached.")
+        
+    # Route model dynamically if routed by query router
+    routed_model = pre.get("model", model_name)
+    routed_provider = "google" if "gemini" in routed_model.lower() else "groq"
+    if pre.get("degraded") or routed_model != model_name:
+        model_name = routed_model
+        model_provider = routed_provider
 
     past_messages = session_db.exec(
         select(Message)
@@ -278,6 +376,113 @@ async def post_message(
         rag_config = RAGConfig(project_id=project_id)
         style = "Concise"
 
+    # Pre-generation gate search execution
+    search_results = rag_engine.search(
+        query=content,
+        project_id=project_id,
+        k=rag_config.top_k,
+        score_threshold=rag_config.similarity_threshold
+    )
+
+    trace_dict = getattr(search_results, "pipeline_trace", {})
+    gate_result = getattr(search_results, "confidence_gate_result", None)
+    query_analysis = getattr(search_results, "query_analysis", None)
+
+    ctx_chunks = [d.page_content for d, _ in search_results]
+    src_from_tools = []
+    for d, _ in search_results:
+        meta = d.metadata or {}
+        src_from_tools.append({
+            "source": str(meta.get("source", "Unknown")),
+            "doc_id": int(meta["doc_id"]) if meta.get("doc_id") is not None else 0
+        })
+
+    search_stats = {
+        "chunks_before_pruning": getattr(search_results, "chunks_before_pruning", 0),
+        "chunks_after_pruning": getattr(search_results, "chunks_after_pruning", 0),
+        "pruning_reduction_pct": getattr(search_results, "pruning_reduction_pct", 0.0),
+        "used_hybrid_search": getattr(search_results, "used_hybrid_search", False)
+    }
+
+    if gate_result and not gate_result.passed:
+        # Pre-generation gate failed: REFUSE TO GENERATE
+        answer = gate_result.refusal_reason
+        latency_ms = (time.time() - t0_overall) * 1000.0
+        
+        if "stages" in trace_dict:
+            trace_dict["stages"]["llm_generation"] = {
+                "stage": "llm_generation",
+                "start_time": time.time(),
+                "end_time": time.time(),
+                "duration_ms": 0.0,
+                "status": "skipped",
+                "metadata": {"reason": "confidence_gate_failed"}
+            }
+            trace_dict["status"] = "failed"
+            trace_dict["total_duration_ms"] = latency_ms
+
+        usage_metadata = {
+            "model": model_name,
+            "provider": model_provider,
+            "temperature": temperature,
+            "history_limit": history_limit,
+            "embeddings": "Google Gemini (embedding-001)",
+            "context_used": "Confidence Gate Refused",
+            "timestamp": datetime.utcnow().isoformat(),
+            "quality": {
+                "hallucination_score": 0.0,
+                "faithfulness_score": 0.0,
+                "overall_quality_score": 0.0,
+                "quality_label": "Refused (Low Confidence)"
+            }
+        }
+
+        assistant_msg = Message(
+            session_id=session_id,
+            role="assistant",
+            content=answer,
+            sources="[]",
+            usage_metadata=usage_metadata
+        )
+        session_db.add(assistant_msg)
+        session_db.commit()
+        session_db.refresh(assistant_msg)
+
+        qlog = QueryLog(
+            project_id=project_id,
+            user_id=current_user.id,
+            session_id=session_id,
+            query_text=content,
+            response_text=answer,
+            model_used=f"{model_provider}/{model_name} (Refused)",
+            latency_ms=latency_ms,
+            chunks_retrieved=0,
+            tokens_used=0,
+            citations_shown=0,
+            citations_clicked=0,
+            context_chunks_json="[]",
+            hallucination_score=0.0,
+            faithfulness_score=0.0,
+            chunks_before_pruning=search_stats.get("chunks_before_pruning", 0),
+            chunks_after_pruning=search_stats.get("chunks_after_pruning", 0),
+            pruning_reduction_pct=search_stats.get("pruning_reduction_pct", 0.0),
+            used_hybrid_search=search_stats.get("used_hybrid_search", False),
+            pipeline_trace=trace_dict
+        )
+        session_db.add(qlog)
+        session_db.commit()
+        session_db.refresh(qlog)
+
+        return {
+            "session_id": session_id,
+            "role": "assistant",
+            "content": answer,
+            "sources": [],
+            "usage_metadata": usage_metadata,
+            "query_log_id": qlog.id,
+            "quality": usage_metadata["quality"]
+        }
+
     system_prompt = f"""You are a helpful AI assistant with access to tools.
     Current Project ID: {project_id}.
     Response Style: {style}.
@@ -322,43 +527,37 @@ async def post_message(
         return_intermediate_steps=True,
     )
 
-    t0 = time.perf_counter()
+    llm_start_time = time.time()
     try:
         result = await agent_executor.ainvoke({"input": content, "chat_history": chat_history})
         answer = result["output"]
+        llm_status = "success"
+        llm_error = None
     except Exception as e:
         answer = f"Error during processing: {str(e)}"
+        llm_status = "failed"
+        llm_error = str(e)
         result = {"intermediate_steps": []}
 
-    latency_ms = (time.perf_counter() - t0) * 1000.0
+    latency_ms = (time.time() - t0_overall) * 1000.0
+    llm_duration_ms = (time.time() - llm_start_time) * 1000.0
 
-    ctx_chunks, src_from_tools, search_stats = _context_from_intermediate_steps(result if isinstance(result, dict) else {})
-    if not ctx_chunks and project_id is not None:
-        try:
-            cfg = rag_engine.get_active_config(project_id)
-            raw = rag_engine.search(
-                content,
-                project_id,
-                k=cfg.top_k,
-                score_threshold=cfg.similarity_threshold,
-            )
-            ctx_chunks = [d.page_content for d, _ in raw]
-            for d, _ in raw:
-                meta = d.metadata or {}
-                src_from_tools.append(
-                    {
-                        "source": str(meta.get("source", "Unknown")),
-                        "doc_id": int(meta["doc_id"]) if meta.get("doc_id") is not None else 0,
-                    }
-                )
-            search_stats = {
-                "chunks_before_pruning": getattr(raw, "chunks_before_pruning", 0),
-                "chunks_after_pruning": getattr(raw, "chunks_after_pruning", 0),
-                "pruning_reduction_pct": getattr(raw, "pruning_reduction_pct", 0.0),
-                "used_hybrid_search": getattr(raw, "used_hybrid_search", False),
-            }
-        except Exception:
-            pass
+    if "stages" in trace_dict:
+        trace_dict["stages"]["llm_generation"] = {
+            "stage": "llm_generation",
+            "start_time": llm_start_time,
+            "end_time": time.time(),
+            "duration_ms": llm_duration_ms,
+            "status": llm_status,
+            "metadata": {
+                "model": model_name,
+                "provider": model_provider
+            },
+            "error_message": llm_error
+        }
+        if llm_status == "failed":
+            trace_dict["status"] = "failed"
+        trace_dict["total_duration_ms"] = latency_ms
 
     sync_scores = evaluate_rag_response(content, answer, ctx_chunks)
 
@@ -406,6 +605,10 @@ async def post_message(
         o_tokens = int(output_est / 4)
         tokens_used = i_tokens + o_tokens
         cost = calculate_cost(model_name, model_provider, i_tokens, o_tokens)
+        
+        # Post cost control call recording
+        cost_manager.post_call(content, answer, cost, pre.get("tier", "standard"))
+        
         usage_record = TokenUsage(
             project_id=project_id,
             user_id=current_user.id,
@@ -443,6 +646,7 @@ async def post_message(
         chunks_after_pruning=search_stats.get("chunks_after_pruning", 0),
         pruning_reduction_pct=search_stats.get("pruning_reduction_pct", 0.0),
         used_hybrid_search=search_stats.get("used_hybrid_search", False),
+        pipeline_trace=trace_dict
     )
     session_db.add(qlog)
     session_db.commit()

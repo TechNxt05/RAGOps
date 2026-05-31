@@ -21,6 +21,11 @@ class DebugSearchResult(BaseModel):
     score: float
     document_name: str
 
+class DebugSearchResponse(BaseModel):
+    results: List[DebugSearchResult]
+    query_analysis: Optional[dict] = None
+    pipeline_trace: Optional[dict] = None
+
 class DebugSearchRequest(BaseModel):
     project_id: int
     query: str
@@ -40,7 +45,7 @@ def get_document_chunks(
     # Simple estimation for tokens if not stored: chars / 4
     return [ChunkDTO(id=c.id, content=c.content, token_count=len(c.content)//4) for c in chunks]
 
-@router.post("/search", response_model=List[DebugSearchResult])
+@router.post("/search", response_model=DebugSearchResponse)
 def debug_search(
     request: DebugSearchRequest,
     session: Session = Depends(get_session),
@@ -62,30 +67,27 @@ def debug_search(
         
         output = []
         for doc, score in results:
-            # We need to find the filename. Metadata might have it or we fetch from DB
-            # metadata usually has 'source' or 'filename' if we set it during ingestion
             filename = doc.metadata.get("source", "Unknown")
-             # Try to normalize filename if it's a full path
             if "/" in filename or "\\" in filename:
                 filename = filename.split("/")[-1].split("\\")[-1]
 
             # Normalize Score for UI (FAISS L2 Distance -> Similarity)
-            # Distance: 0 (Good) to Infinite (Bad)
-            # Similarity: 1 (Good) to 0 (Bad)
-            # Formula: 1 / (1 + distance)
             try:
-                # If score is very large/small, clamp or handle
                 normalized_score = 1 / (1 + score)
             except:
                 normalized_score = 0.0
 
             output.append(DebugSearchResult(
-                chunk_id=0, # We might not have ID in vector store easily unless we stored it in metadata
+                chunk_id=0,
                 content=doc.page_content,
                 score=normalized_score,
                 document_name=filename
             ))
             
-        return output
+        return DebugSearchResponse(
+            results=output,
+            query_analysis=getattr(results, "query_analysis", None),
+            pipeline_trace=getattr(results, "pipeline_trace", None)
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

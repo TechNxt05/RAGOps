@@ -43,6 +43,8 @@ export default function AdminDashboard() {
     const [chunks, setChunks] = useState<Chunk[]>([]);
     const [debugQuery, setDebugQuery] = useState("");
     const [debugResults, setDebugResults] = useState<DebugSearchResult[]>([]);
+    const [debugQueryAnalysis, setDebugQueryAnalysis] = useState<any>(null);
+    const [debugPipelineTrace, setDebugPipelineTrace] = useState<any>(null);
     const [isSearching, setIsSearching] = useState(false);
 
     const [newProjectName, setNewProjectName] = useState("");
@@ -154,13 +156,15 @@ export default function AdminDashboard() {
         if (!selectedProject || !debugQuery) return;
         setIsSearching(true);
         try {
-            const results = await debugSearch({
+            const res = await debugSearch({
                 project_id: selectedProject.id,
                 query: debugQuery,
                 top_k: config.top_k || 4,
                 similarity_threshold: config.similarity_threshold || 0
             });
-            setDebugResults(results);
+            setDebugResults(res.results);
+            setDebugQueryAnalysis(res.query_analysis);
+            setDebugPipelineTrace(res.pipeline_trace);
         } catch (e) {
             toast.error("Search failed");
         } finally {
@@ -543,7 +547,7 @@ export default function AdminDashboard() {
                                             <CardTitle className="flex items-center gap-2"><Search className="w-5 h-5" /> Retrieval Playground</CardTitle>
                                             <CardDescription>Test your vector search logic.</CardDescription>
                                         </CardHeader>
-                                        <CardContent className="flex-1 flex flex-col space-y-4">
+                                        <CardContent className="flex-1 flex flex-col space-y-4 text-left">
                                             <div className="flex gap-2">
                                                 <Input
                                                     placeholder="Enter a test query..."
@@ -562,26 +566,140 @@ export default function AdminDashboard() {
                                                 <strong>Threshold: {config.similarity_threshold}</strong>
                                             </div>
 
-                                            <div className="flex-1 overflow-y-auto border rounded-md p-2 bg-slate-50 dark:bg-slate-900 space-y-2">
-                                                {debugResults.length === 0 && !isSearching && <div className="text-center text-muted-foreground pt-10">No results. Try a query.</div>}
-                                                {debugResults.map((res, i) => (
-                                                    <div key={i} className="p-3 bg-white dark:bg-slate-800 rounded border shadow-sm">
-                                                        <div className="flex justify-between items-start mb-2">
-                                                            <div className="text-xs font-semibold text-blue-600 truncate max-w-[200px]">{res.document_name}</div>
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
-                                                                    <div
-                                                                        className={`h-full ${res.score > 0.7 ? 'bg-green-500' : res.score > 0.5 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                                                                        style={{ width: `${Math.max(0, Math.min(100, res.score * 100))}%` }}
-                                                                    />
+                                            <Tabs defaultValue="results" className="w-full flex-1 flex flex-col min-h-0 text-left">
+                                                <TabsList className="grid w-full grid-cols-3">
+                                                    <TabsTrigger value="results">Retrieved Chunks</TabsTrigger>
+                                                    <TabsTrigger value="understanding">Query Analysis</TabsTrigger>
+                                                    <TabsTrigger value="trace">Pipeline Trace</TabsTrigger>
+                                                </TabsList>
+
+                                                <TabsContent value="results" className="flex-1 flex flex-col min-h-0 mt-2">
+                                                    <div className="flex-1 overflow-y-auto border rounded-md p-2 bg-slate-50 dark:bg-slate-900 space-y-2 max-h-[350px]">
+                                                        {debugResults.length === 0 && !isSearching && <div className="text-center text-muted-foreground pt-10">No results. Try a query.</div>}
+                                                        {debugResults.map((res, i) => (
+                                                            <div key={i} className="p-3 bg-white dark:bg-slate-800 rounded border shadow-sm">
+                                                                <div className="flex justify-between items-start mb-2">
+                                                                    <div className="text-xs font-semibold text-blue-600 truncate max-w-[200px]">{res.document_name}</div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                                                            <div
+                                                                                className={`h-full ${res.score > 0.7 ? 'bg-green-500' : res.score > 0.5 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                                                                style={{ width: `${Math.max(0, Math.min(100, res.score * 100))}%` }}
+                                                                            />
+                                                                        </div>
+                                                                        <span className="text-xs font-mono">{(res.score * 100).toFixed(1)}%</span>
+                                                                    </div>
                                                                 </div>
-                                                                <span className="text-xs font-mono">{(res.score * 100).toFixed(1)}%</span>
+                                                                <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-4">{res.content}</p>
                                                             </div>
-                                                        </div>
-                                                        <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-4">{res.content}</p>
+                                                        ))}
                                                     </div>
-                                                ))}
-                                            </div>
+                                                </TabsContent>
+
+                                                <TabsContent value="understanding" className="flex-1 flex flex-col min-h-0 mt-2 text-left">
+                                                    <div className="flex-1 border rounded-md p-3 bg-slate-50 dark:bg-slate-900 text-xs text-left max-h-[350px] overflow-y-auto">
+                                                        {debugQueryAnalysis ? (
+                                                            <div className="space-y-4 text-left">
+                                                                <div className="flex items-center justify-between p-2 rounded bg-white dark:bg-slate-800 border">
+                                                                    <span className="font-semibold text-muted-foreground uppercase text-[10px] text-left">Complexity Classification</span>
+                                                                    <span className={`px-2 py-0.5 rounded-full font-bold uppercase text-[9px] ${
+                                                                        debugQueryAnalysis.complexity === 'factoid' ? 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300' :
+                                                                        debugQueryAnalysis.complexity === 'analytical' ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300' :
+                                                                        'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300'
+                                                                    }`}>
+                                                                        {debugQueryAnalysis.complexity} ({(debugQueryAnalysis.confidence * 100).toFixed(0)}% confidence)
+                                                                    </span>
+                                                                </div>
+
+                                                                <div className="space-y-1 text-left">
+                                                                    <span className="font-bold text-muted-foreground uppercase text-[9px] block text-left">Decomposed Sub-Queries</span>
+                                                                    <div className="space-y-1 text-left">
+                                                                        {debugQueryAnalysis.sub_queries?.map((sub: string, idx: number) => (
+                                                                            <div key={idx} className="p-2 rounded bg-white dark:bg-slate-800 border text-slate-700 dark:text-slate-300 font-mono text-[11px] text-left">
+                                                                                {idx + 1}. {sub}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="space-y-1 text-left">
+                                                                    <span className="font-bold text-muted-foreground uppercase text-[9px] block text-left">Expanded Query String</span>
+                                                                    <div className="p-2 rounded bg-white dark:bg-slate-800 border text-slate-700 dark:text-slate-300 font-mono text-[11px] break-words text-left">
+                                                                        {debugQueryAnalysis.expanded_query || "No expansion applied"}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-center text-muted-foreground py-10">Run a search query to view semantic analysis.</div>
+                                                        )}
+                                                    </div>
+                                                </TabsContent>
+
+                                                <TabsContent value="trace" className="flex-1 flex flex-col min-h-0 mt-2 text-left">
+                                                    <div className="flex-1 border rounded-md p-3 bg-slate-50 dark:bg-slate-900 text-xs text-left max-h-[350px] overflow-y-auto">
+                                                        {debugPipelineTrace ? (
+                                                            <div className="space-y-4 text-left">
+                                                                <div className="flex justify-between items-center border-b pb-2 text-left">
+                                                                    <div>
+                                                                        <span className="font-bold text-slate-700 dark:text-slate-300">Pipeline Status</span>
+                                                                        <span className={`ml-2 px-1.5 py-0.5 rounded font-mono uppercase text-[9px] ${
+                                                                            debugPipelineTrace.status === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                                                                        }`}>
+                                                                            {debugPipelineTrace.status}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="text-right font-mono text-muted-foreground">
+                                                                        Total: {debugPipelineTrace.total_duration_ms?.toFixed(1)}ms
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="relative border-l-2 border-slate-200 dark:border-slate-700 ml-3 pl-4 space-y-4 text-left">
+                                                                    {Object.entries(debugPipelineTrace.stages || {}).map(([sName, sTrace]: [string, any]) => (
+                                                                        <div key={sName} className="relative text-left">
+                                                                            {/* Stage Dot Indicator */}
+                                                                            <div className={`absolute -left-[23px] top-1.5 w-3.5 h-3.5 rounded-full border-2 bg-white dark:bg-slate-900 ${
+                                                                                sTrace.status === 'success' ? 'border-emerald-500' :
+                                                                                sTrace.status === 'failed' ? 'border-rose-500' :
+                                                                                sTrace.status === 'skipped' ? 'border-amber-400' :
+                                                                                'border-slate-300'
+                                                                            }`} />
+
+                                                                            <div className="space-y-1 bg-white dark:bg-slate-800 p-2.5 rounded border shadow-sm text-left">
+                                                                                <div className="flex justify-between items-center text-left">
+                                                                                    <span className="font-bold capitalize text-slate-700 dark:text-slate-300 text-left">{sName.replace(/_/g, ' ')}</span>
+                                                                                    <span className="font-mono text-muted-foreground text-[10px]">
+                                                                                        {sTrace.duration_ms?.toFixed(1) || '0.0'}ms
+                                                                                    </span>
+                                                                                </div>
+                                                                                <span className="text-[10px] text-muted-foreground uppercase block text-left">Status: {sTrace.status}</span>
+                                                                                
+                                                                                {sTrace.error_message && (
+                                                                                    <p className="text-[10px] text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/20 p-1.5 rounded border border-rose-100 dark:border-rose-900/40 mt-1 font-mono break-words leading-tight text-left">
+                                                                                        {sTrace.error_message}
+                                                                                    </p>
+                                                                                )}
+                                                                                
+                                                                                {sTrace.metadata && Object.keys(sTrace.metadata).length > 0 && (
+                                                                                    <div className="mt-2 text-[10px] text-slate-500 font-mono bg-slate-50 dark:bg-slate-900/60 p-1.5 rounded border border-dashed border-slate-200 dark:border-slate-800 max-h-32 overflow-y-auto text-left">
+                                                                                        {Object.entries(sTrace.metadata).map(([k, v]: [string, any]) => (
+                                                                                            <div key={k} className="flex justify-between gap-2 border-b border-slate-100 dark:border-slate-800/40 last:border-0 py-0.5 text-left">
+                                                                                                <span className="text-slate-400 text-left">{k}:</span>
+                                                                                                <span className="text-right text-slate-600 dark:text-slate-400 truncate max-w-[200px]">{JSON.stringify(v)}</span>
+                                                                                            </div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-center text-muted-foreground py-10">Run a search query to inspect stage timings.</div>
+                                                        )}
+                                                    </div>
+                                                </TabsContent>
+                                            </Tabs>
                                         </CardContent>
                                     </Card>
                                 </div>

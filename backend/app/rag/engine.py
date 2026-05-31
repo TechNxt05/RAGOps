@@ -31,6 +31,11 @@ class SearchResultList(list):
         self.chunks_after_pruning = 0
         self.pruning_reduction_pct = 0.0
         self.used_hybrid_search = False
+        
+        # New attributes for upgrades
+        self.query_analysis = None
+        self.confidence_gate_result = None
+        self.pipeline_trace = None
 
 
 class RAGEngine:
@@ -166,14 +171,16 @@ class RAGEngine:
 
             embeddings = self._get_embeddings(config)
             
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=config.chunk_size,
-                chunk_overlap=config.chunk_overlap,
-                length_function=len,
-            )
+            from app.services.adaptive_chunker import get_adaptive_chunker
 
             content = document.content or ""
-            texts = text_splitter.split_text(content)
+            doc_type = document.filename.split(".")[-1] if document.filename and "." in document.filename else "unknown"
+            
+            chunker = get_adaptive_chunker(chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap)
+            texts, strategy, metrics, all_scores = chunker.select_and_chunk(
+                text=content,
+                document_type=doc_type
+            )
 
             if os.path.exists(VECTOR_STORE_PATH):
                 try:
@@ -210,6 +217,19 @@ class RAGEngine:
             document.chunk_count = len(texts)
             document.chunk_size_used = config.chunk_size
             document.embedding_model_used = config.embedding_model or "google-embedding-001"
+            
+            # Save strategy metadata
+            document.chunking_strategy = strategy.value
+            document.chunking_metrics = {
+                "composite_score": metrics.composite_score,
+                "size_compliance": metrics.size_compliance,
+                "intrachunk_cohesion": metrics.intrachunk_cohesion,
+                "contextual_coherence": metrics.contextual_coherence,
+                "block_integrity": metrics.block_integrity,
+                "reference_completeness": metrics.reference_completeness,
+                "all_strategy_scores": all_scores
+            }
+            
             self.session.add(document)
             self.session.commit()
 
@@ -232,6 +252,12 @@ class RAGEngine:
         if not os.path.exists(VECTOR_STORE_PATH):
             return SearchResultList()
             
+        from app.services.query_understanding import get_query_understanding
+        from app.services.confidence_gate import get_confidence_gate
+        from app.services.pipeline_tracer import PipelineTracer, PipelineStage
+
+        tracer = PipelineTracer(query)
+        
         try:
             config = self.get_active_config(project_id)
             embeddings = self._get_embeddings(config)
@@ -240,43 +266,86 @@ class RAGEngine:
                 VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True
             )
 
-            # Retrieve candidate pool for hybrid, pruning, and reranking
-            candidate_k = max(k * 5, 20)
-
-            results_with_score = vector_store.similarity_search_with_score(
-                query,
-                k=candidate_k,
-                filter={"project_id": project_id},
+            # Stage 1: Query Understanding
+            tracer.start_stage(PipelineStage.QUERY_UNDERSTANDING)
+            query_understander = get_query_understanding()
+            analysis = query_understander.analyze(query)
+            tracer.end_stage(
+                PipelineStage.QUERY_UNDERSTANDING,
+                metadata={
+                    "complexity": analysis.complexity.value,
+                    "sub_queries": analysis.sub_queries,
+                    "expanded_query": analysis.expanded_query,
+                    "suggested_top_k": analysis.suggested_top_k,
+                    "confidence": analysis.confidence
+                }
             )
 
+            # Stage 2: Retrieval
+            tracer.start_stage(PipelineStage.RETRIEVAL)
+            effective_query = analysis.expanded_query
+            suggested_top_k = analysis.suggested_top_k
+            candidate_k = max(suggested_top_k * 5, 20)
+            
             inactive = self._inactive_doc_ids(project_id)
             semantic_results: List[Tuple[LCDocument, float]] = []
-            for doc, score in results_with_score:
-                meta = doc.metadata or {}
-                did = meta.get("doc_id")
-                if did is not None and int(did) in inactive:
-                    continue
-                semantic_results.append((doc, score))
-
-            merged_results = []
+            bm25_results: List[Tuple[str, float]] = []
             used_hybrid = False
 
-            # If hybrid search is enabled and the index exists, do BM25 + merge
-            if config.use_hybrid_search and bm25_manager.index_exists(str(project_id)):
-                bm25_res = bm25_manager.search(str(project_id), query, top_k=candidate_k)
-                if bm25_res:
-                    merged_results = hybrid_search_merge(
-                        semantic_results=semantic_results,
-                        bm25_results=bm25_res,
-                        semantic_weight=config.semantic_weight,
-                        bm25_weight=1.0 - config.semantic_weight
+            if analysis.retrieval_strategy == "multi" and len(analysis.sub_queries) > 1:
+                seen_semantic = set()
+                seen_bm25 = set()
+                for sub_q in analysis.sub_queries:
+                    # Semantic Search per sub-query
+                    sub_res = vector_store.similarity_search_with_score(
+                        sub_q,
+                        k=candidate_k // 2,
+                        filter={"project_id": project_id},
                     )
-                    used_hybrid = True
+                    for doc, score in sub_res:
+                        did = doc.metadata.get("doc_id")
+                        if did is not None and int(did) in inactive:
+                            continue
+                        if doc.page_content not in seen_semantic:
+                            seen_semantic.add(doc.page_content)
+                            semantic_results.append((doc, score))
+                    
+                    # BM25 Search per sub-query
+                    if config.use_hybrid_search and bm25_manager.index_exists(str(project_id)):
+                        sub_bm25 = bm25_manager.search(str(project_id), sub_q, top_k=candidate_k // 2)
+                        for text, score in sub_bm25:
+                            if text not in seen_bm25:
+                                seen_bm25.add(text)
+                                bm25_results.append((text, score))
+            else:
+                # Single expanded query
+                results_with_score = vector_store.similarity_search_with_score(
+                    effective_query,
+                    k=candidate_k,
+                    filter={"project_id": project_id},
+                )
+                for doc, score in results_with_score:
+                    did = doc.metadata.get("doc_id")
+                    if did is not None and int(did) in inactive:
+                        continue
+                    semantic_results.append((doc, score))
 
-            if not used_hybrid:
+                if config.use_hybrid_search and bm25_manager.index_exists(str(project_id)):
+                    bm25_results = bm25_manager.search(str(project_id), effective_query, top_k=candidate_k)
+
+            # Hybrid Merge (RRF)
+            if config.use_hybrid_search and bm25_results:
+                merged_results = hybrid_search_merge(
+                    semantic_results=semantic_results,
+                    bm25_results=bm25_results,
+                    semantic_weight=config.semantic_weight,
+                    bm25_weight=1.0 - config.semantic_weight
+                )
+                used_hybrid = True
+            else:
                 merged_results = semantic_results
 
-            # Context Pruning (using TF-IDF similarity threshold, default at least 0.1)
+            # Context Pruning
             prune_threshold = max(config.similarity_threshold or 0.0, 0.1)
             pruned_results, orig_count, pruned_count, reduction_pct = context_pruner.prune(
                 query=query,
@@ -284,21 +353,83 @@ class RAGEngine:
                 threshold=prune_threshold
             )
 
-            # BGE Reranker (re-rank pruned candidates down to target k)
+            # BGE Reranker
             final_reranked = reranker_service.rerank(
                 query=query,
                 chunks=pruned_results,
                 top_k=k
             )
 
-            # Wrap in SearchResultList subclass to carry metadata back to route handlers
+            tracer.end_stage(
+                PipelineStage.RETRIEVAL,
+                metadata={
+                    "chunks_before_pruning": orig_count,
+                    "chunks_after_pruning": pruned_count,
+                    "pruning_reduction_pct": reduction_pct,
+                    "used_hybrid_search": used_hybrid,
+                    "candidate_k": candidate_k
+                }
+            )
+
+            # Stage 3: Source Confidence Scoring & Gate
+            tracer.start_stage(PipelineStage.CONFIDENCE_GATE)
+            
+            # Fetch upload date and file type for confidence gate evaluation
+            doc_ids = list(set(int(doc.metadata.get("doc_id")) for doc, _ in final_reranked if doc.metadata.get("doc_id") is not None))
+            doc_meta_map = {}
+            if doc_ids:
+                docs = self.session.exec(select(Document).where(Document.id.in_(doc_ids))).all()
+                for d in docs:
+                    doc_meta_map[d.id] = {
+                        "file_type": d.filename.split(".")[-1] if "." in d.filename else "unknown",
+                        "upload_date": d.uploaded_at
+                    }
+
+            chunk_dicts = []
+            reranker_scores = []
+            document_metadata = []
+            for doc, score in final_reranked:
+                did = doc.metadata.get("doc_id")
+                meta = doc_meta_map.get(did, {}) if did else {}
+                chunk_dicts.append({
+                    "id": str(did or ""),
+                    "text": doc.page_content
+                })
+                reranker_scores.append(score)
+                document_metadata.append(meta)
+
+            confidence_gate = get_confidence_gate(threshold=0.65)
+            gate_result = confidence_gate.evaluate(chunk_dicts, reranker_scores, document_metadata)
+            
+            tracer.end_stage(
+                PipelineStage.CONFIDENCE_GATE,
+                status="success" if gate_result.passed else "failed",
+                metadata={
+                    "passed": gate_result.passed,
+                    "max_confidence": gate_result.max_confidence,
+                    "avg_confidence": gate_result.avg_confidence,
+                    "low_confidence_chunks": gate_result.low_confidence_chunks,
+                    "refusal_reason": gate_result.refusal_reason
+                },
+                error=gate_result.refusal_reason if not gate_result.passed else None
+            )
+
+            # Package output
+            tracer.complete_pipeline()
             final_results = SearchResultList(final_reranked)
             final_results.chunks_before_pruning = orig_count
             final_results.chunks_after_pruning = pruned_count
             final_results.pruning_reduction_pct = reduction_pct
             final_results.used_hybrid_search = used_hybrid
+            final_results.query_analysis = analysis
+            final_results.confidence_gate_result = gate_result
+            final_results.pipeline_trace = tracer.to_dict()
 
             return final_results
+
         except Exception as e:
-            logging.error(f"Error loading FAISS index: {e}")
-            return SearchResultList()
+            logging.error(f"Error in RAGEngine.search pipeline: {e}")
+            tracer.fail_pipeline(str(e))
+            empty_res = SearchResultList()
+            empty_res.pipeline_trace = tracer.to_dict()
+            return empty_res
