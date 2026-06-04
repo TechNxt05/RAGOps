@@ -104,6 +104,14 @@ export interface QualityScores {
   quality_label: string;
 }
 
+export interface AgenticStep {
+  step: string;
+  strategy: string;
+  confidence: number;
+  action_taken: string;
+  latency_ms: number;
+}
+
 export interface ChatMessageResponse {
   session_id: number;
   role: string;
@@ -112,7 +120,12 @@ export interface ChatMessageResponse {
   usage_metadata: Record<string, unknown> | null;
   query_log_id: number | null;
   quality: QualityScores | null;
+  agent_trace?: AgenticStep[];
+  attempts?: number;
+  strategies_tried?: string[];
+  answered?: boolean;
 }
+
 
 export interface ProjectAnalytics {
   total_queries: number;
@@ -131,6 +144,12 @@ export interface ProjectAnalytics {
     avg_hallucination: number | null;
     avg_faithfulness: number | null;
   }[];
+  agentic_metrics?: {
+    total_agentic_queries: number;
+    agentic_success_rate: number;
+    avg_agentic_attempts: number;
+    most_common_fallbacks: { strategy: string; count: number }[];
+  };
 }
 
 export interface CompareSide {
@@ -306,6 +325,34 @@ export const sendMessage = async (
   });
   return response.data;
 };
+
+export const sendAgenticMessage = async (
+  content: string,
+  projectId?: number,
+  sessionId?: number,
+  temp?: number,
+  modelProvider: string = 'groq',
+  modelName: string = 'llama-3.3-70b-versatile',
+  historyLimit: number = 5,
+  projectContextLimit: number = 2,
+  contextSessionIds: number[] = [],
+  title?: string
+): Promise<ChatMessageResponse> => {
+  const response = await api.post<ChatMessageResponse>('/api/query/agentic', {
+    content,
+    project_id: projectId ?? null,
+    session_id: sessionId ?? null,
+    temperature: temp,
+    model_provider: modelProvider,
+    model_name: modelName,
+    history_limit: historyLimit,
+    project_context_limit: projectContextLimit,
+    context_session_ids: contextSessionIds,
+    title: title ?? null,
+  });
+  return response.data;
+};
+
 
 export const compareModels = async (projectId: number, query: string) => {
   const response = await api.post<CompareModelsResponse>('/chat/compare-models', {

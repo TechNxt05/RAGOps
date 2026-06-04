@@ -23,8 +23,10 @@ import { useAuth } from "@/lib/auth-context";
 import { getProjectAnalytics, getProjects, type ProjectAnalytics, type Project } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ArrowLeft, BarChart3 } from "lucide-react";
+
 
 const COLORS = ["#6366f1", "#22c55e", "#f97316", "#ec4899", "#14b8a6"];
 
@@ -185,6 +187,37 @@ export default function ProjectAnalyticsPage() {
                   <span className="ml-2 text-[10px] font-normal text-muted-foreground">to LLM context</span>
                 </CardContent>
               </Card>
+
+              {/* Agentic RAG Performance Card */}
+              {data?.agentic_metrics && data.agentic_metrics.total_agentic_queries > 0 && (
+                <Card className="border-indigo-200 bg-indigo-50/30 dark:border-indigo-900 dark:bg-indigo-950/20 col-span-full md:col-span-4 grid gap-4 grid-cols-1 md:grid-cols-3 p-4">
+                  <div className="flex flex-col justify-center">
+                    <h3 className="text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">Agentic Query Success Rate</h3>
+                    <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-300 mt-1">{data.agentic_metrics.agentic_success_rate}%</p>
+                    <p className="text-xs text-muted-foreground mt-1">Queries answered successfully vs cannot_answer ({data.agentic_metrics.total_agentic_queries} total)</p>
+                  </div>
+                  <div className="flex flex-col justify-center border-l dark:border-indigo-900 pl-4">
+                    <h3 className="text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">Average Attempts / Query</h3>
+                    <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-300 mt-1">{data.agentic_metrics.avg_agentic_attempts}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Goal is 1.0 (lower is better, max 3.0)</p>
+                  </div>
+                  <div className="flex flex-col justify-center border-l dark:border-indigo-900 pl-4">
+                    <h3 className="text-xs font-semibold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">Common Fallbacks Tried</h3>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {data.agentic_metrics.most_common_fallbacks && data.agentic_metrics.most_common_fallbacks.length > 0 ? (
+                        data.agentic_metrics.most_common_fallbacks.map((item: any, idx: number) => (
+                          <Badge key={idx} variant="outline" className="text-[10px] uppercase border-indigo-200 text-indigo-700 dark:text-indigo-355 dark:border-indigo-800">
+                            {item.strategy} ({item.count})
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-xs text-muted-foreground">No fallback attempts logged yet</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">Strategies triggered during replanning steps</p>
+                  </div>
+                </Card>
+              )}
             </div>
           )}
         </ErrorBoundary>

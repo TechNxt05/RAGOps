@@ -137,6 +137,32 @@ def get_project_analytics(
     avg_reduction = sum(pruning_reductions) / len(pruning_reductions) if pruning_reductions else 0.0
     hybrid_usage_pct = (sum(hybrid_searches) / len(hybrid_searches) * 100.0) if hybrid_searches else 0.0
 
+    # Agentic RAG Metrics
+    agentic_logs = [
+        l for l in logs 
+        if l.pipeline_trace and isinstance(l.pipeline_trace, dict) and l.pipeline_trace.get("agentic")
+    ]
+    total_agentic = len(agentic_logs)
+    agentic_success_rate = 0.0
+    avg_agentic_attempts = 0.0
+    most_common_fallbacks = []
+
+    if total_agentic > 0:
+        agentic_successes = sum(1 for l in agentic_logs if l.pipeline_trace.get("answered", True))
+        agentic_success_rate = (agentic_successes / total_agentic) * 100.0
+        avg_agentic_attempts = sum(l.pipeline_trace.get("attempts", 1) for l in agentic_logs) / total_agentic
+        
+        fallback_counter = Counter()
+        for l in agentic_logs:
+            strats = l.pipeline_trace.get("strategies_tried", [])
+            if len(strats) > 1:
+                for s in strats[1:]:
+                    fallback_counter[s] += 1
+        most_common_fallbacks = [
+            {"strategy": k, "count": v} 
+            for k, v in fallback_counter.items()
+        ]
+
     return {
         "total_queries": total,
         "avg_latency_ms": round(avg_latency, 2),
@@ -150,4 +176,11 @@ def get_project_analytics(
         "daily_volume": daily_volume,
         "model_breakdown": model_breakdown,
         "quality_daily": quality_daily,
+        "agentic_metrics": {
+            "total_agentic_queries": total_agentic,
+            "agentic_success_rate": round(agentic_success_rate, 2),
+            "avg_agentic_attempts": round(avg_agentic_attempts, 2),
+            "most_common_fallbacks": most_common_fallbacks
+        }
     }
+

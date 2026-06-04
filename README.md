@@ -72,6 +72,21 @@ graph TD
 
 ---
 
+## 🔮 RAG Architecture Support
+
+| Architecture | Status | Implementation |
+|---|---|---|
+| Naive RAG | ✅ | Baseline semantic retrieval |
+| Advanced RAG | ✅ | Query rewriting + BGE reranker + adaptive chunking |
+| Hybrid RAG | ✅ | BM25 + FAISS + RRF fusion |
+| Corrective RAG | ✅ | Confidence gate + pre-generation validation |
+| Agentic RAG | ✅ | LangGraph retrieval agent with replanning |
+| Graph RAG | Roadmap | — |
+| Multi-Modal RAG | Roadmap | — |
+
+---
+
+
 ## ⚡ Technical Stack
 
 ### Frontend (Next.js Standalone)

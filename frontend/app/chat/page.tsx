@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { getProjects, sendMessage, getRAGConfig, getDocuments, getSessions, deleteSession, getHistory, Project, RAGConfig, Document, trackCitationClick, type ChatMessageResponse, type QualityScores } from '@/lib/api';
+import { getProjects, sendMessage, sendAgenticMessage, getRAGConfig, getDocuments, getSessions, deleteSession, getHistory, Project, RAGConfig, Document, trackCitationClick, type ChatMessageResponse, type QualityScores, type AgenticStep } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
+
 interface Source {
     source: string;
     doc_id: number;
@@ -34,6 +35,10 @@ interface Message {
     usage_metadata?: Record<string, unknown>;
     query_log_id?: number | null;
     quality?: QualityScores | null;
+    agent_trace?: AgenticStep[];
+    attempts?: number;
+    strategies_tried?: string[];
+    answered?: boolean;
 }
 
 export default function ChatPage() {
@@ -46,6 +51,7 @@ export default function ChatPage() {
     const [sessionId, setSessionId] = useState<number | null>(null);
     const [projectConfig, setProjectConfig] = useState<RAGConfig | null>(null);
     const [documents, setDocuments] = useState<Document[]>([]);
+    const [isAgenticMode, setIsAgenticMode] = useState(false);
 
     // Project & Settings State
     const [projects, setProjects] = useState<Project[]>([]);
@@ -210,6 +216,8 @@ export default function ChatPage() {
                     if (typeof s.model_name === "string") setModelName(s.model_name);
                     if (typeof s.temperature === "number") setTemperature([s.temperature]);
                     if (typeof s.history_limit === "number") setHistoryLimit([s.history_limit]);
+                    if (typeof s.agentic === "boolean") setIsAgenticMode(s.agentic);
+                    else setIsAgenticMode(false);
                 }
             }
 
@@ -225,19 +233,32 @@ export default function ChatPage() {
         setIsTyping(true);
 
         try {
-            // New Session created with Project ID if sessionId is null
-            const res: ChatMessageResponse = await sendMessage(
-                userMsg.content,
-                selectedProject.id,
-                sessionId || undefined,
-                temperature[0],
-                modelProvider,
-                modelName,
-                historyLimit[0],
-                0,
-                selectedContextSessions,
-                pendingChatTitle || undefined
-            );
+            // Call either sendAgenticMessage or sendMessage depending on toggle
+            const res = isAgenticMode 
+                ? await sendAgenticMessage(
+                    userMsg.content,
+                    selectedProject.id,
+                    sessionId || undefined,
+                    temperature[0],
+                    modelProvider,
+                    modelName,
+                    historyLimit[0],
+                    0,
+                    selectedContextSessions,
+                    pendingChatTitle || undefined
+                )
+                : await sendMessage(
+                    userMsg.content,
+                    selectedProject.id,
+                    sessionId || undefined,
+                    temperature[0],
+                    modelProvider,
+                    modelName,
+                    historyLimit[0],
+                    0,
+                    selectedContextSessions,
+                    pendingChatTitle || undefined
+                );
 
             let sources = res.sources;
             if (typeof sources === 'string') {
@@ -251,6 +272,10 @@ export default function ChatPage() {
                 usage_metadata: res.usage_metadata ?? undefined,
                 query_log_id: res.query_log_id ?? undefined,
                 quality: res.quality ?? undefined,
+                agent_trace: res.agent_trace,
+                attempts: res.attempts,
+                strategies_tried: res.strategies_tried,
+                answered: res.answered,
             };
 
             setMessages(prev => [...prev, botMsg]);
@@ -603,65 +628,91 @@ export default function ChatPage() {
                                     )}
 
                                     <div className={`space-y-2 max-w-[85%]`}>
-                                        <div className={`p-4 rounded-3xl shadow-sm text-sm ${msg.role === 'user'
-                                            ? 'bg-indigo-600 text-white rounded-tr-none'
-                                            : 'bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-tl-none'
-                                            }`}>
-                                            {msg.content}
+                                        {msg.role === 'assistant' && msg.answered === false ? (
+                                            <div className="p-4 border border-red-200 dark:border-red-950/50 rounded-3xl rounded-tl-none bg-red-50/50 dark:bg-red-950/20 text-slate-850 dark:text-slate-200 space-y-3 shadow-sm text-sm">
+                                                <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-semibold">
+                                                    <Bot className="w-5 h-5 shrink-0" />
+                                                    <span>Unanswered Query ({msg.attempts || 3} attempts)</span>
+                                                </div>
+                                                <p className="leading-relaxed">
+                                                    {msg.content}
+                                                </p>
+                                                {msg.strategies_tried && msg.strategies_tried.length > 0 && (
+                                                    <div className="text-xs text-muted-foreground pt-1">
+                                                        <span className="font-semibold block mb-1">Retrieval strategies tried:</span>
+                                                        <div className="flex gap-1.5 flex-wrap">
+                                                            {msg.strategies_tried.map((strat, idx) => (
+                                                                <Badge key={idx} variant="secondary" className="text-[9px] uppercase tracking-wider">{strat}</Badge>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                <div className="text-xs text-muted-foreground border-t dark:border-slate-800 pt-2 flex items-center gap-1.5">
+                                                    <span>💡</span>
+                                                    <span>Try rephrasing or uploading more relevant documents.</span>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className={`p-4 rounded-3xl shadow-sm text-sm ${msg.role === 'user'
+                                                ? 'bg-indigo-600 text-white rounded-tr-none'
+                                                : 'bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-tl-none'
+                                                }`}>
+                                                {msg.content}
 
-                                            {msg.role === 'assistant' && msg.usage_metadata && (
-                                                <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 flex justify-end">
-                                                    <Popover>
-                                                        <PopoverTrigger asChild>
-                                                            <Button variant="ghost" size="sm" className="h-5 rounded-full text-[10px] px-2 gap-1 text-slate-500 hover:text-indigo-600">
-                                                                <Info className="w-3 h-3" />
-                                                                Gen Info
-                                                            </Button>
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-64 p-3">
-                                                            <div className="space-y-2">
-                                                                <h4 className="font-semibold text-xs border-b pb-1 mb-1">Generation Settings</h4>
-                                                                <div className="grid grid-cols-2 gap-y-1 text-xs">
-                                                                    <span className="text-muted-foreground">Model:</span>
-                                                                    <span className="font-mono">{String(msg.usage_metadata.model ?? "")}</span>
+                                                {msg.role === 'assistant' && msg.usage_metadata && (
+                                                    <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+                                                        <Popover>
+                                                            <PopoverTrigger asChild>
+                                                                <Button variant="ghost" size="sm" className="h-5 rounded-full text-[10px] px-2 gap-1 text-slate-500 hover:text-indigo-600">
+                                                                    <Info className="w-3 h-3" />
+                                                                    Gen Info
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-64 p-3">
+                                                                <div className="space-y-2">
+                                                                    <h4 className="font-semibold text-xs border-b pb-1 mb-1">Generation Settings</h4>
+                                                                    <div className="grid grid-cols-2 gap-y-1 text-xs">
+                                                                        <span className="text-muted-foreground">Model:</span>
+                                                                        <span className="font-mono">{String(msg.usage_metadata.model ?? "")}</span>
 
-                                                                    <span className="text-muted-foreground">Temp:</span>
-                                                                    <span className="font-mono">{String(msg.usage_metadata.temperature ?? "")}</span>
+                                                                        <span className="text-muted-foreground">Temp:</span>
+                                                                        <span className="font-mono">{String(msg.usage_metadata.temperature ?? "")}</span>
 
-                                                                    <span className="text-muted-foreground">Provider:</span>
-                                                                    <span className="font-mono">{String(msg.usage_metadata.provider ?? "")}</span>
+                                                                        <span className="text-muted-foreground">Provider:</span>
+                                                                        <span className="font-mono">{String(msg.usage_metadata.provider ?? "")}</span>
 
-                                                                    <span className="text-muted-foreground">Embeddings:</span>
-                                                                    <span className="font-mono truncate" title={String(msg.usage_metadata.embeddings ?? "")}>{String(msg.usage_metadata.embeddings ?? "")}</span>
-                                                                </div>
-                                                                <div className="space-y-1 pt-2 border-t">
-                                                                    <span className="text-xs font-semibold text-muted-foreground">RAG Config:</span>
-                                                                    <div className="grid grid-cols-2 gap-y-1 text-xs pl-2">
-                                                                        <span className="text-muted-foreground">Chunk Size:</span>
-                                                                        <span>{String((msg.usage_metadata.rag_config as Record<string, unknown> | undefined)?.chunk_size ?? "")}</span>
-                                                                        <span className="text-muted-foreground">Overlap:</span>
-                                                                        <span>{String((msg.usage_metadata.rag_config as Record<string, unknown> | undefined)?.chunk_overlap ?? "")}</span>
-                                                                        <span className="text-muted-foreground">Top K:</span>
-                                                                        <span>{(msg.usage_metadata.rag_config as Record<string, unknown> | undefined)?.similarity_threshold ? `> ${String((msg.usage_metadata.rag_config as Record<string, unknown>).similarity_threshold)}` : "Default"}</span>
+                                                                        <span className="text-muted-foreground">Embeddings:</span>
+                                                                        <span className="font-mono truncate" title={String(msg.usage_metadata.embeddings ?? "")}>{String(msg.usage_metadata.embeddings ?? "")}</span>
                                                                     </div>
-                                                                </div>
-                                                                {msg.usage_metadata.context_used != null &&
-                                                                    String(msg.usage_metadata.context_used) !== "None" && (
                                                                     <div className="space-y-1 pt-2 border-t">
-                                                                        <span className="text-xs font-semibold text-muted-foreground">Context Used:</span>
-                                                                        <div className="text-[10px] text-slate-600 pl-2">
-                                                                            {Array.isArray(msg.usage_metadata.context_used)
-                                                                                ? (msg.usage_metadata.context_used as string[]).join(", ")
-                                                                                : String(msg.usage_metadata.context_used ?? "")}
+                                                                        <span className="text-xs font-semibold text-muted-foreground">RAG Config:</span>
+                                                                        <div className="grid grid-cols-2 gap-y-1 text-xs pl-2">
+                                                                            <span className="text-muted-foreground">Chunk Size:</span>
+                                                                            <span>{String((msg.usage_metadata.rag_config as Record<string, unknown> | undefined)?.chunk_size ?? "")}</span>
+                                                                            <span className="text-muted-foreground">Overlap:</span>
+                                                                            <span>{String((msg.usage_metadata.rag_config as Record<string, unknown> | undefined)?.chunk_overlap ?? "")}</span>
+                                                                            <span className="text-muted-foreground">Top K:</span>
+                                                                            <span>{(msg.usage_metadata.rag_config as Record<string, unknown> | undefined)?.similarity_threshold ? `> ${String((msg.usage_metadata.rag_config as Record<string, unknown>).similarity_threshold)}` : "Default"}</span>
                                                                         </div>
                                                                     </div>
-                                                                )}
-                                                            </div>
-                                                        </PopoverContent>
-                                                    </Popover>
-                                                </div>
-                                            )}
-                                        </div>
+                                                                    {msg.usage_metadata.context_used != null &&
+                                                                        String(msg.usage_metadata.context_used) !== "None" && (
+                                                                        <div className="space-y-1 pt-2 border-t">
+                                                                            <span className="text-xs font-semibold text-muted-foreground">Context Used:</span>
+                                                                            <div className="text-[10px] text-slate-600 pl-2">
+                                                                                {Array.isArray(msg.usage_metadata.context_used)
+                                                                                    ? (msg.usage_metadata.context_used as string[]).join(", ")
+                                                                                    : String(msg.usage_metadata.context_used ?? "")}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
 
                                         {msg.role === "assistant" && user.role === "admin" && (() => {
                                             const raw = msg.quality ?? msg.usage_metadata?.quality;
@@ -687,6 +738,63 @@ export default function ChatPage() {
                                                 </div>
                                             );
                                         })()}
+
+                                        {msg.role === 'assistant' && msg.agent_trace && msg.agent_trace.length > 0 && (
+                                            <div className="border dark:border-slate-800 rounded-2xl overflow-hidden bg-slate-100/40 dark:bg-slate-900/40 backdrop-blur-sm max-w-full">
+                                                <details className="group">
+                                                    <summary className="flex items-center justify-between p-3 text-xs font-semibold text-slate-500 cursor-pointer hover:bg-slate-100/80 dark:hover:bg-slate-800/80 select-none">
+                                                        <div className="flex items-center gap-2">
+                                                            <Bot className="w-4 h-4 text-indigo-500 animate-pulse animate-duration-1000" />
+                                                            <span>Agent Reasoning Timeline ({msg.agent_trace.length} steps)</span>
+                                                        </div>
+                                                        <ChevronRight className="w-3.5 h-3.5 transition-transform group-open:rotate-90 text-slate-400" />
+                                                    </summary>
+                                                    <div className="p-3.5 border-t dark:border-slate-800 space-y-3.5 text-xs bg-white/70 dark:bg-slate-900/70">
+                                                        {msg.agent_trace.map((step, idx) => {
+                                                            const isHigh = step.confidence >= 0.75;
+                                                            
+                                                            let statusIcon = "🔄";
+                                                            let badgeColor = "bg-yellow-100 text-yellow-800 dark:bg-yellow-950/30 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-900/50";
+                                                            
+                                                            if (isHigh) {
+                                                                statusIcon = "✅";
+                                                                badgeColor = "bg-green-100 text-green-800 dark:bg-green-950/30 dark:text-green-400 border border-green-200 dark:border-green-900/50";
+                                                            } else if (step.action_taken.toLowerCase().includes("cannot answer") || (idx === msg.agent_trace.length - 1 && msg.answered === false)) {
+                                                                statusIcon = "❌";
+                                                                badgeColor = "bg-red-100 text-red-800 dark:bg-red-950/30 dark:text-red-400 border border-red-200 dark:border-red-900/50";
+                                                            }
+                                                            
+                                                            return (
+                                                                <div key={idx} className="flex gap-3 items-start relative pb-3 last:pb-0">
+                                                                    {idx < msg.agent_trace.length - 1 && (
+                                                                        <div className="absolute left-[9px] top-6 bottom-0 w-[1px] bg-slate-200 dark:bg-slate-800" />
+                                                                    )}
+                                                                    <span className="text-xs shrink-0 mt-0.5 select-none">{statusIcon}</span>
+                                                                    <div className="flex-1 space-y-1">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                                                                {step.step || `Attempt ${idx + 1}`}
+                                                                            </span>
+                                                                            <span className="text-[10px] text-muted-foreground font-mono">
+                                                                                {step.latency_ms ? `${step.latency_ms.toFixed(0)}ms` : ''}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="text-slate-600 dark:text-slate-400 flex flex-wrap items-center gap-1.5 mt-1">
+                                                                            Strategy: <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-slate-50 dark:bg-slate-900 uppercase font-mono">{step.strategy}</Badge>
+                                                                            <span>•</span>
+                                                                            Confidence: <Badge className={`text-[9px] px-1.5 py-0 font-mono font-medium ${badgeColor}`}>{step.confidence.toFixed(2)}</Badge>
+                                                                        </div>
+                                                                        <div className="text-slate-500 dark:text-slate-400 italic text-[10.5px] mt-1 pl-0.5">
+                                                                            → {step.action_taken}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </details>
+                                            </div>
+                                        )}
 
                                         {msg.role === 'assistant' && msg.sources && (Array.isArray(msg.sources) ? msg.sources : []).length > 0 && (
                                             <div className="flex gap-2 flex-wrap ml-2">
@@ -736,23 +844,52 @@ export default function ChatPage() {
 
                 {/* Input Area */}
                 <div className="p-4 bg-white dark:bg-slate-900 border-t shrink-0">
-                    <div className="max-w-3xl mx-auto flex gap-2">
-                        <Input
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                            placeholder={selectedProject ? `Ask about "${selectedProject.name}"...` : "Select a project to start chatting..."}
-                            disabled={!selectedProject}
-                            className="flex-1 rounded-full px-6 h-12 border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus-visible:ring-indigo-500 text-base"
-                        />
-                        <Button
-                            onClick={handleSend}
-                            disabled={!selectedProject || !input.trim()}
-                            size="icon"
-                            className="shrink-0 w-12 h-12 rounded-full bg-indigo-600 hover:bg-indigo-700 transition-all shadow-lg hover:shadow-indigo-500/25"
-                        >
-                            <Send className="w-5 h-5" />
-                        </Button>
+                    <div className="max-w-3xl mx-auto flex flex-col gap-2">
+                        {/* Agentic Mode Toggle */}
+                        {selectedProject && (
+                            <div className="flex justify-end items-center gap-2 px-2 pb-1 text-xs select-none">
+                                <span className={`transition-colors ${!isAgenticMode ? 'text-indigo-600 font-semibold' : 'text-muted-foreground'}`}>Standard Mode</span>
+                                <button
+                                    onClick={() => setIsAgenticMode(prev => !prev)}
+                                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${isAgenticMode ? 'bg-indigo-600' : 'bg-slate-200 dark:bg-slate-800'}`}
+                                >
+                                    <span
+                                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${isAgenticMode ? 'translate-x-4' : 'translate-x-0'}`}
+                                    />
+                                </button>
+                                <span className={`flex items-center gap-1 transition-colors ${isAgenticMode ? 'text-indigo-600 font-semibold' : 'text-muted-foreground'}`}>
+                                    Agentic Mode
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Info className="w-3 h-3 text-slate-400 hover:text-indigo-500 cursor-help" />
+                                            </TooltipTrigger>
+                                            <TooltipContent className="max-w-xs p-2 text-xs">
+                                                Agentic Mode executes a multi-strategy LangGraph loop to autonomously plan, execute, and replan retrieval if confidence is low.
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                </span>
+                            </div>
+                        )}
+                        <div className="flex gap-2">
+                            <Input
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                                placeholder={selectedProject ? `Ask about "${selectedProject.name}"...` : "Select a project to start chatting..."}
+                                disabled={!selectedProject}
+                                className="flex-1 rounded-full px-6 h-12 border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus-visible:ring-indigo-500 text-base"
+                            />
+                            <Button
+                                onClick={handleSend}
+                                disabled={!selectedProject || !input.trim()}
+                                size="icon"
+                                className="shrink-0 w-12 h-12 rounded-full bg-indigo-600 hover:bg-indigo-700 transition-all shadow-lg hover:shadow-indigo-500/25"
+                            >
+                                <Send className="w-5 h-5" />
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </div >
