@@ -14,6 +14,8 @@ In the modern enterprise, deploying simple vector-search chatbots is insufficien
 2. **Lexical vs. Semantic Precision**: Pure semantic vector searches fail on specific keyword lookups (like invoice numbers or specialized codes), while pure keyword search misses conceptual context. RAGOps solves this using **Sparse/Dense Hybrid Search (FAISS + BM25)** fused via **Reciprocal Rank Fusion (RRF)**.
 3. **Context Noise & Cost**: Feeding massive, redundant chunks to LLMs wastes tokens and dilutes generation quality. RAGOps incorporates a **Deep Cross-Encoder Reranker (BGE-Reranker)** and a **Sentence-Level Contextual Compressor** to keep only the highest relevance data.
 
+All of these capabilities are coordinated by the main orchestrator, [RAGEngine](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/rag/engine.py), and served via API endpoints defined in [chat_routes.py](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/rag/chat_routes.py).
+
 ---
 
 ## 🌟 Advanced Production Upgrades (Phase 1, 2, & 3)
@@ -22,31 +24,49 @@ RAGOps has been enhanced with production-grade components designed to optimize r
 
 ### Phase 1: Query Intelligence Layer
 * **Turn-Type Router**: Session-aware gating that classifies query intents into `CHIT_CHAT`, `RETRIEVAL`, or `FOLLOW_UP`. It bypasses the retrieval pipeline for chit-chat or fetches directly from cache for session follow-ups.
+  * *Implementation*: [TurnTypeRouter](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/turn_type_router.py)
 * **Pre-Retrieval Query Rewriter**: History-aware query rewriter that leverages conversation history to expand search query candidates, solving pronoun reference dilution.
+  * *Implementation*: [QueryRewriter](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/query_rewriter.py)
 * **Computation Router**: Directly translates analytical database questions into SQL query statements, bypassing standard vector document retrieval and returning exact database calculations.
+  * *Implementation*: [ComputationRouter](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/computation_router.py)
 * **Constraint Extractor**: Identifies and extracts hard constraints from queries (e.g. excluded terms, date boundaries, file types, source patterns) and applies them dynamically to context chunks.
+  * *Implementation*: [ConstraintExtractor](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/constraint_extractor.py)
 * **Session Context Cache**: Implements an active memory bank caching raw context chunks for follow-up questions, preventing redundant vector search retrievals.
+  * *Implementation*: [SessionContextCache](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/session_context_cache.py)
 
 ### Phase 2: Ingestion and Retrieval Core
 * **DeltaIndexer**: Hashes document chunk payloads during ingestion, computing differentials to add, update, or prune only modified chunks in FAISS indices.
+  * *Implementation*: [DeltaIndexer](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/delta_indexer.py)
 * **DoclingParser**: Advanced layout-aware document parser targeting PDFs and Word files to extract tables, captions, headers, and semantic structures natively.
+  * *Implementation*: [DoclingParser](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/docling_parser.py)
 * **MultiQueryRetriever**: Employs query-variant generation pipelines, executing parallel searches and deduplicating results to maximize semantic context coverage.
+  * *Implementation*: [MultiQueryRetriever](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/multi_query_retriever.py)
 * **CrossReferenceResolver**: Scans chunks for internal references (e.g., "see Section 4.2", "detailed in Appendix B") and resolves them by retrieving the parent/child chunks.
+  * *Implementation*: [CrossReferenceResolver](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/cross_reference_resolver.py)
 * **ConflictDetector**: Compares facts across retrieved chunks, highlighting contradictory numbers, dates, or statements from different files to alert users.
+  * *Implementation*: [ConflictDetector](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/conflict_detector.py)
 * **AbsenceProver**: Handles low-confidence queries by checking if information is truly absent in the database, yielding verified refusals.
+  * *Implementation*: [AbsenceProver](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/absence_prover.py)
 * **IngestionScanner**: Periodic local directory scanner that automatically discovers, extracts, and indexes documents in the background.
+  * *Implementation*: [IngestionScanner](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/ingestion_scanner.py)
 * **VersionedSemanticCache**: Semantic cache that maps questions to answers while respecting document versions and hashing signatures.
+  * *Implementation*: [VersionedSemanticCache](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/versioned_cache.py)
 
 ### Phase 3: Evaluation and Output Layer
 * **SemanticRouter**: Classifies queries into `FACTOID`, `ANALYTICAL`, `COMPARATIVE`, `PROCEDURAL`, or `DEFINITIONAL`, dynamically choosing search strategies (`FAST`, `STANDARD`, `DEEP`, `PARALLEL`) to override retrieval top_k, multi-query, and reranking parameters.
+  * *Implementation*: [SemanticRouter](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/semantic_router.py)
 * **ContextualCompressor**: A query-aware sentence-level compressor that strips filler text while preserving key entities, currencies, codes, and numerical values verbatim.
-* **RAGASEvaluator**: Purely deterministic mapping of TF-IDF quality signals to the standard RAGAS triad:
+  * *Implementation*: [ContextualCompressor](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/contextual_compressor.py)
+* **RAGASEvaluator**: Purely deterministic mapping of quality signals to the standard RAGAS triad:
   * *Context Relevance*: How relevant retrieved chunks are to the user's query.
   * *Faithfulness*: If response statements are fully supported by context.
   * *Answer Relevance*: How directly the generated answer addresses the question.
   * *Groundedness*: Fraction of generated response tokens present in source documents.
+  * *Implementation*: [RAGASEvaluator](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/ragas_metrics.py)
 * **OutputContract**: Generates and enforces formatting constraints (`CONCISE`, `STRUCTURED`, `DETAILED`, `TABLE`, or `CODE`) with post-generation compliance checks.
+  * *Implementation*: [OutputContractBuilder](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/output_contract.py)
 * **PromptCacheManager**: Structures system prompts to enable prefix caching for Anthropic (using `cache_control` markers) and OpenAI, logging cost-savings estimations.
+  * *Implementation*: [PromptCacheManager](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/prompt_cache_manager.py)
 
 ---
 
