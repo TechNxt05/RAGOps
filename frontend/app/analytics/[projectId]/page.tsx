@@ -83,6 +83,12 @@ export default function ProjectAnalyticsPage() {
       date: d.date,
       hallucination: d.avg_hallucination ?? 0,
       faithfulness: d.avg_faithfulness ?? 0,
+      context_relevance: d.avg_context_relevance ?? 0,
+      ragas_faithfulness: d.avg_ragas_faithfulness ?? 0,
+      answer_relevance: d.avg_answer_relevance ?? 0,
+      groundedness: d.avg_groundedness ?? 0,
+      overall_ragas: d.avg_overall_ragas ?? 0,
+      compression_ratio: d.avg_compression_ratio ?? 0,
     })) ?? [];
 
   return (
@@ -185,6 +191,15 @@ export default function ProjectAnalyticsPage() {
                 <CardContent className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                   {(data?.avg_chunks_after_pruning ?? 0).toFixed(1)}
                   <span className="ml-2 text-[10px] font-normal text-muted-foreground">to LLM context</span>
+                </CardContent>
+              </Card>
+              <Card className="border-emerald-100 bg-emerald-50/20 dark:border-emerald-950 dark:bg-emerald-950/10">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-emerald-705 dark:text-emerald-300">Prompt cache monthly savings</CardTitle>
+                </CardHeader>
+                <CardContent className="text-2xl font-bold text-emerald-600 dark:text-emerald-450">
+                  ${(data?.avg_cache_savings_usd ?? 0.0).toFixed(2)}
+                  <span className="ml-2 text-[10px] font-normal text-muted-foreground">USD / Month</span>
                 </CardContent>
               </Card>
 
@@ -326,6 +341,84 @@ export default function ProjectAnalyticsPage() {
                         stroke="#22c55e"
                         strokeDasharray="4 4"
                         label={{ value: "Faithfulness target", position: "insideBottomRight" }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>RAGAS daily metrics trend</CardTitle>
+                </CardHeader>
+                <CardContent className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={qualityLine}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                      <YAxis domain={[0, 1]} tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Legend />
+                      <Line
+                        type="monotone"
+                        dataKey="context_relevance"
+                        stroke="#6366f1"
+                        dot={false}
+                        name="Context Relevance"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="ragas_faithfulness"
+                        stroke="#22c55e"
+                        dot={false}
+                        name="Faithfulness"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="answer_relevance"
+                        stroke="#f59e0b"
+                        dot={false}
+                        name="Answer Relevance"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="groundedness"
+                        stroke="#ec4899"
+                        dot={false}
+                        name="Groundedness"
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="overall_ragas"
+                        stroke="#14b8a6"
+                        strokeWidth={2}
+                        dot={false}
+                        name="Overall RAGAS Score"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Context compression ratio trend</CardTitle>
+                </CardHeader>
+                <CardContent className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={qualityLine}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                      <YAxis domain={[0, 1]} tickFormatter={(val) => `${(val * 100).toFixed(0)}%`} tick={{ fontSize: 11 }} />
+                      <Tooltip formatter={(value: any) => `${(Number(value) * 100).toFixed(1)}%`} />
+                      <Legend />
+                      <Line
+                        type="monotone"
+                        dataKey="compression_ratio"
+                        stroke="#8b5cf6"
+                        strokeWidth={2}
+                        dot={false}
+                        name="Context Compression Ratio"
                       />
                     </LineChart>
                   </ResponsiveContainer>

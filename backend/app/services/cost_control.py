@@ -384,17 +384,23 @@ class CostControlManager:
         hourly_limit_usd: float = 5.0,
         daily_limit_usd: float = 50.0,
     ):
-        self.cache = SemanticCache(threshold=cache_threshold, ttl_seconds=cache_ttl)
+        base_cache = SemanticCache(threshold=cache_threshold, ttl_seconds=cache_ttl)
+        from app.services.versioned_cache import VersionedSemanticCache
+        self.cache = VersionedSemanticCache(base_cache)
         self.router = QueryRouter()
         self.breaker = CostCircuitBreaker(
             hourly_limit_usd=hourly_limit_usd,
             daily_limit_usd=daily_limit_usd,
         )
     
-    def pre_call(self, query: str) -> dict:
+    def pre_call(self, query: str, project_id: Optional[int] = None, kb_version: Optional[int] = None) -> dict:
         """Call before LLM. Returns cache hit or routing decision."""
         # 1. Cache check
-        cached = self.cache.get(query)
+        if project_id is not None and kb_version is not None:
+            cached = self.cache.get(query, project_id, kb_version)
+        else:
+            cached = self.cache.base_cache.get(query)
+            
         if cached:
             return {"source": "cache", "response": cached, "cost": 0.0}
         
@@ -413,9 +419,12 @@ class CostControlManager:
             "degraded": reason == "degraded",
         }
     
-    def post_call(self, query: str, response: str, cost_usd: float, model_tier: str):
+    def post_call(self, query: str, response: str, cost_usd: float, model_tier: str, project_id: Optional[int] = None, kb_version: Optional[int] = None):
         """Call after LLM. Records spend and caches response."""
-        self.cache.set(query, response)
+        if project_id is not None and kb_version is not None:
+            self.cache.set(query, response, project_id, kb_version)
+        else:
+            self.cache.base_cache.set(query, response)
         self.breaker.record_spend(cost_usd, model_tier)
         self.breaker.record_success()
     

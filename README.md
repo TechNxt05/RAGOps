@@ -1,8 +1,8 @@
 # RAGOps: Enterprise-Grade RAG Platform
 
-> **Admin-Controlled, Project-Based Hybrid Retrieval Augmented Generation System**
+> **Admin-Controlled, Project-Based Hybrid Retrieval-Augmented Generation (RAG) System**
 >
-> *Built with Next.js, FastAPI, LangChain, pgvector, FAISS, and BGE Cross-Encoder Reranker.*
+> *Built with Next.js 15, FastAPI, LangChain, pgvector, FAISS, BM25, and BGE Cross-Encoder Reranker.*
 
 ---
 
@@ -12,22 +12,41 @@ In the modern enterprise, deploying simple vector-search chatbots is insufficien
 
 1. **Security & Data Isolation**: Sensitive HR documents must not mingle with general internal wikis. RAGOps introduces strict **Project-Based Isolation** with robust role-based access controls (RBAC).
 2. **Lexical vs. Semantic Precision**: Pure semantic vector searches fail on specific keyword lookups (like invoice numbers or specialized codes), while pure keyword search misses conceptual context. RAGOps solves this using **Sparse/Dense Hybrid Search (FAISS + BM25)** fused via **Reciprocal Rank Fusion (RRF)**.
-3. **Context Noise & Cost**: Feeding massive, redundant chunks to LLMs wastes tokens and dilutes generation quality. RAGOps incorporates a **Deep Cross-Encoder Reranker (BGE-Reranker)** and a **TF-IDF Cosine Similarity Context Pruner** to keep only the highest relevance data.
+3. **Context Noise & Cost**: Feeding massive, redundant chunks to LLMs wastes tokens and dilutes generation quality. RAGOps incorporates a **Deep Cross-Encoder Reranker (BGE-Reranker)** and a **Sentence-Level Contextual Compressor** to keep only the highest relevance data.
 
 ---
 
-## 🌟 Advanced Production Upgrades (May 2026)
+## 🌟 Advanced Production Upgrades (Phase 1, 2, & 3)
 
-RAGOps has been enhanced with five advanced production-grade components designed to optimize retrieval quality, control LLM spend, and supply granular pipeline diagnostics:
+RAGOps has been enhanced with production-grade components designed to optimize retrieval quality, control LLM spend, and supply granular pipeline diagnostics.
 
-1. **Adaptive Chunking Engine (Ekimetrics LREC 2026)**: Rather than naive fixed-size chunking, RAGOps evaluates four candidate chunking strategies (Fixed, Paragraph, Semantic, and Recursive) against 5 intrinsic metrics (size compliance, cohesive density, boundary flow, blocks integrity, and pronoun antecedent coherence) to select the mathematically optimal chunk configuration per-document.
-2. **Pre-Retrieval Query Understanding**: Performs complexity classification (Factoid, Analytical, and Multi-Hop), automatic sub-query decomposition for multi-hop queries, and domain-specific query expansion to prepare optimal search candidates.
-3. **Source Confidence & Hallucination Gate**: Formulates a weighted retrieve-relevance confidence score based on source type authority, chunk-query agreement, and document freshness decay. Generation only proceeds if confidence is $\ge 0.65$, preventing hallucinations by returning a graceful refusal.
-4. **Cost Control Layer**:
-   * **Semantic Query Cache**: A fast TF-IDF cosine-similarity cache that intercepts duplicate/highly similar queries to serve answers instantly.
-   * **Heuristic Heuristic Router**: Smart, low-overhead query routing matching complexity classifications to optimal model sizes (e.g. routing simple factoids to `gemini-1.5-flash` and complex analytical queries to `gemini-1.5-pro`).
-   * **Spend Circuit Breaker**: Implements hourly/daily USD spending caps to safeguard against budget overruns and run-away agents.
-5. **E2E Pipeline Tracing & Timing Metrics**: Deep pipeline tracers track and record execution timing (ms) and success/failure statuses for every retrieval, pruning, and generation stage—viewable inside the interactive Trace Playground.
+### Phase 1: Query Intelligence Layer
+* **Turn-Type Router**: Session-aware gating that classifies query intents into `CHIT_CHAT`, `RETRIEVAL`, or `FOLLOW_UP`. It bypasses the retrieval pipeline for chit-chat or fetches directly from cache for session follow-ups.
+* **Pre-Retrieval Query Rewriter**: History-aware query rewriter that leverages conversation history to expand search query candidates, solving pronoun reference dilution.
+* **Computation Router**: Directly translates analytical database questions into SQL query statements, bypassing standard vector document retrieval and returning exact database calculations.
+* **Constraint Extractor**: Identifies and extracts hard constraints from queries (e.g. excluded terms, date boundaries, file types, source patterns) and applies them dynamically to context chunks.
+* **Session Context Cache**: Implements an active memory bank caching raw context chunks for follow-up questions, preventing redundant vector search retrievals.
+
+### Phase 2: Ingestion and Retrieval Core
+* **DeltaIndexer**: Hashes document chunk payloads during ingestion, computing differentials to add, update, or prune only modified chunks in FAISS indices.
+* **DoclingParser**: Advanced layout-aware document parser targeting PDFs and Word files to extract tables, captions, headers, and semantic structures natively.
+* **MultiQueryRetriever**: Employs query-variant generation pipelines, executing parallel searches and deduplicating results to maximize semantic context coverage.
+* **CrossReferenceResolver**: Scans chunks for internal references (e.g., "see Section 4.2", "detailed in Appendix B") and resolves them by retrieving the parent/child chunks.
+* **ConflictDetector**: Compares facts across retrieved chunks, highlighting contradictory numbers, dates, or statements from different files to alert users.
+* **AbsenceProver**: Handles low-confidence queries by checking if information is truly absent in the database, yielding verified refusals.
+* **IngestionScanner**: Periodic local directory scanner that automatically discovers, extracts, and indexes documents in the background.
+* **VersionedSemanticCache**: Semantic cache that maps questions to answers while respecting document versions and hashing signatures.
+
+### Phase 3: Evaluation and Output Layer
+* **SemanticRouter**: Classifies queries into `FACTOID`, `ANALYTICAL`, `COMPARATIVE`, `PROCEDURAL`, or `DEFINITIONAL`, dynamically choosing search strategies (`FAST`, `STANDARD`, `DEEP`, `PARALLEL`) to override retrieval top_k, multi-query, and reranking parameters.
+* **ContextualCompressor**: A query-aware sentence-level compressor that strips filler text while preserving key entities, currencies, codes, and numerical values verbatim.
+* **RAGASEvaluator**: Purely deterministic mapping of TF-IDF quality signals to the standard RAGAS triad:
+  * *Context Relevance*: How relevant retrieved chunks are to the user's query.
+  * *Faithfulness*: If response statements are fully supported by context.
+  * *Answer Relevance*: How directly the generated answer addresses the question.
+  * *Groundedness*: Fraction of generated response tokens present in source documents.
+* **OutputContract**: Generates and enforces formatting constraints (`CONCISE`, `STRUCTURED`, `DETAILED`, `TABLE`, or `CODE`) with post-generation compliance checks.
+* **PromptCacheManager**: Structures system prompts to enable prefix caching for Anthropic (using `cache_control` markers) and OpenAI, logging cost-savings estimations.
 
 ---
 
@@ -37,38 +56,60 @@ RAGOps has been enhanced with five advanced production-grade components designed
 |------------|:-----:|:------:|
 | **Sparse/Dense Hybrid Search** (FAISS + BM25 + RRF) | ✅ | ❌ (View Config) |
 | **Deep Reranking** (`BAAI/bge-reranker-base`) | ✅ | ❌ (View Config) |
-| **Context Pruning** (TF-IDF Similarity Filter) | ✅ | ❌ (View Config) |
+| **Contextual Compression** (Sentence-Level Filter) | ✅ | ❌ (View Config) |
+| **RAGAS Quality Telemetry** (Triad + Groundedness) | ✅ | ✅ |
+| **Output Contract Constraints** (Concise, Code, Table, etc.) | ✅ | ✅ |
+| **Prompt Caching Telemetry** (Savings estimations) | ✅ | ❌ |
 | Dynamic Semantic-vs-Lexical Weight Configuration | ✅ | ❌ |
 | Switch embeddings (Google Cloud / Local HF MiniLM) | ✅ | ❌ |
 | Live parallel model comparison & chat panel | ✅ | ❌ |
-| Glowing Indigo Analytics Panel (Pruning Savings, Rerank KPIs) | ✅ | ❌ |
+| Glowing Indigo Analytics Panel (Daily RAGAS Trends, Cache Savings) | ✅ | ❌ |
 | Chat with project-isolated knowledge bases | ✅ | ✅ |
 | Citation click analytics & source validation | ✅ | ✅ |
 
 ---
 
-## 🔮 Retrieval Architecture
+## 🔮 Pipeline Architecture
 
 RAGOps features a state-of-the-art multi-stage hybrid search, reranking, and context filtering workflow:
 
 ```mermaid
 graph TD
-    Query(["User Query"]) --> Hybrid{"Hybrid Search Trigger"}
-    Hybrid -->|Dense Semantic| Semantic["FAISS Vector Store (all-MiniLM-L6-v2)"]
-    Hybrid -->|Sparse Lexical| Lexical["BM25 Lexical Index (Project-Isolated)"]
-    Semantic --> RRF["Reciprocal Rank Fusion (RRF)"]
-    Lexical --> RRF
-    RRF --> Rerank["BGE Cross-Encoder Reranker (BAAI/bge-reranker-base)"]
-    Rerank --> Prune["Context Pruner (TF-IDF Cosine Similarity Filter)"]
-    Prune --> Output(["Pruned High-Relevance Chunks (Max Context Window)"])
+    Query(["User Query"]) --> TurnType{"TurnTypeRouter"}
+    
+    TurnType -->|Chit-Chat| ChitChat["LLM Simple Response"]
+    TurnType -->|Follow-Up| SessionCache["Session Context Cache (Get Chunks)"]
+    TurnType -->|Retrieval / New Turn| CompRouter{"Computation Router"}
+    
+    CompRouter -->|SQL Aggregation| CompEngine["DB Direct Execution (No Retrieval)"]
+    CompRouter -->|Standard RAG| QueryRewriter["Query Rewriter & Expander"]
+    
+    QueryRewriter --> ConstraintExtractor["Constraint Extractor (Extract Constraints)"]
+    ConstraintExtractor --> SemanticCache{"Versioned Semantic Cache"}
+    
+    SemanticCache -->|Hit| CacheReturn["Instant Answer Delivery"]
+    SemanticCache -->|Miss| SemanticRouter["Semantic Query Router (Router Strategy)"]
+    
+    SemanticRouter --> MultiQuery["Multi-Query Retrieval Engine (FAISS + BM25)"]
+    MultiQuery --> XRef["Cross-Reference Resolver (Parent/Child Resolution)"]
+    
+    XRef --> ConstraintFilter["Constraint Extractor (Apply Filters to Chunks)"]
+    ConstraintFilter --> Rerank["BGE Cross-Encoder Reranker (top_n)"]
+    
+    Rerank --> Conflict["Conflict Detector (Fact Contradiction Check)"]
+    Conflict --> Compressor["Sentence-Level Contextual Compressor"]
+    
+    Compressor --> Absence{"Absence Prover (Low Confidence Path)"}
+    Absence -->|Absence Proven| Refusal["Refusal to Generate"]
+    Absence -->|Chunks Found/Retry| ConfGate{"Confidence Gate (>= 0.65)"}
+    
+    ConfGate -->|Passed| PromptCache["Prompt Cache Manager (Anthropic/OpenAI Prefix Cache)"]
+    PromptCache --> OutputContract["Output Contract Builder (System Prompt Directives)"]
+    OutputContract --> LLM["LLM Generation"]
+    
+    LLM --> PostVerify["Post-Generation Output Verifier & RAGAS Evaluator"]
+    PostVerify --> DB["Persist to Database (Message / QueryLog)"]
 ```
-
-### Retrieval & Pruning Stages
-
-1. **Sparse Lexical Indexing**: Uses rank-bm25 index isolating indexes per-project and caching indexes on-disk for lightning-fast reads.
-2. **Reciprocal Rank Fusion (RRF)**: Merges dense FAISS vector rankings with sparse BM25 keyword rankings based on adjustable weights.
-3. **BGE Reranking**: Feeds query and top-fused chunks into `BAAI/bge-reranker-base` to compute precise cross-attention relevance scores, reranking chunks for maximum quality.
-4. **TF-IDF Context Pruning**: Employs scikit-learn cosine-similarity vectorizers to filter out duplicate, redundant, or low-scoring context chunks.
 
 ---
 
@@ -81,11 +122,9 @@ graph TD
 | Hybrid RAG | ✅ | BM25 + FAISS + RRF fusion |
 | Corrective RAG | ✅ | Confidence gate + pre-generation validation |
 | Agentic RAG | ✅ | LangGraph retrieval agent with replanning |
-| Graph RAG | Roadmap | — |
-| Multi-Modal RAG | Roadmap | — |
+| Evaluation Layer | ✅ | Inline RAGAS Triad + Groundedness Metrics |
 
 ---
-
 
 ## ⚡ Technical Stack
 
@@ -98,7 +137,7 @@ graph TD
 ### Backend (FastAPI Enterprise)
 * **Framework**: FastAPI (Python 3.11)
 * **Database**: PostgreSQL (pgvector enabled) with robust SQLModel layers
-* **AI Orchestration**: LangChain, Groq (Llama 3.3), Google Gemini
+* **AI Orchestration**: LangChain, Groq (Llama 3.3), Google Gemini, Langchain Anthropic, Langchain OpenAI
 * **Models Cache**: On-build HuggingFace model cache warming (zero first-request cold-start latency)
 * **Search Engines**: Local FAISS on-disk indexes + Project-isolated BM25 indexes
 
@@ -129,6 +168,8 @@ DATABASE_URL=postgresql://neondb_owner:npg_v94oVqhCKZrw@...
 SECRET_KEY=your_secret_key
 GEMINI_API_KEY=AIzaSy...
 GROQ_API_KEY=gsk_...
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
 ```
 
 ### 2. Backend Server Installation
@@ -178,4 +219,3 @@ Chat response content successfully returned!
 
 **Author**: Amritanshu Yadav  
 **License**: MIT
-

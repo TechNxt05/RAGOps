@@ -33,6 +33,8 @@ def on_startup():
     init_db()
     from app.mcp.registry_init import register_tools
     register_tools()
+    from app.services.session_context_cache import SessionContextCache
+    app.state.session_cache = SessionContextCache()
 
 app.include_router(auth_routes.router)
 app.include_router(project_routes.router)

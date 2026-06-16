@@ -39,7 +39,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Eye, FileText, RefreshCw, Trash2 } from "lucide-react";
+import { Eye, FileText, RefreshCw, Trash2, Shield, ShieldAlert, ShieldCheck } from "lucide-react";
 
 function formatBytes(n?: number | null) {
   if (n == null || n <= 0) return "—";
@@ -265,6 +265,25 @@ export function DocumentManagerPanel({
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{doc.filename}</span>
+                      
+                      {/* Shield Badges */}
+                      {doc.processing_status === "quarantined" ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-800 dark:bg-red-950/40 dark:text-red-300" title="Quarantined: Critical secret detected. Ingestion blocked.">
+                          <ShieldAlert className="h-3 w-3 text-red-600 dark:text-red-400" />
+                          Quarantined
+                        </span>
+                      ) : doc.redaction_log && Object.keys(doc.redaction_log).length > 0 ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-300" title={`Redacted: PII details removed (${Object.keys(doc.redaction_log).length} findings redacted).`}>
+                          <ShieldAlert className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                          Redacted
+                        </span>
+                      ) : doc.processing_status === "complete" || doc.processed ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300" title="Clean: No secrets or PII detected.">
+                          <ShieldCheck className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                          Clean
+                        </span>
+                      ) : null}
+
                       <span
                         className={`rounded-full px-2 py-0.5 text-[10px] uppercase ${
                           active ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"
@@ -285,8 +304,8 @@ export function DocumentManagerPanel({
                     {busy && (
                       <div className="mt-2 space-y-1">
                         <div className="flex justify-between text-[10px] text-muted-foreground">
-                          <span>Processing</span>
-                          <span>{doc.processing_status}</span>
+                          <span>Processing PDF structure...</span>
+                          <span className="capitalize">{doc.processing_status}</span>
                         </div>
                         <motion.div
                           className="h-1.5 overflow-hidden rounded-full bg-muted"

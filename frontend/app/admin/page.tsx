@@ -648,10 +648,190 @@ export default function AdminDashboard() {
                                                                             {debugPipelineTrace.status}
                                                                         </span>
                                                                     </div>
-                                                                    <div className="text-right font-mono text-muted-foreground">
+                                                        <div className="text-right font-mono text-muted-foreground">
                                                                         Total: {debugPipelineTrace.total_duration_ms?.toFixed(1)}ms
                                                                     </div>
                                                                 </div>
+
+                                                                {debugPipelineTrace.turn_type && (
+                                                                 <div className="grid grid-cols-2 gap-3 mb-4">
+                                                                     {debugPipelineTrace.turn_type && (
+                                                                         <div className="col-span-2 flex space-x-2">
+                                                                             <div className="flex-1 bg-white dark:bg-slate-800 p-2.5 rounded border shadow-sm">
+                                                                                 <span className="text-[10px] uppercase text-muted-foreground font-semibold">Turn Classification</span>
+                                                                                 <div className="mt-1 font-mono text-xs">{debugPipelineTrace.turn_type}</div>
+                                                                             </div>
+                                                                             {debugPipelineTrace.route_decision && (
+                                                                                 <div className="flex-1 bg-white dark:bg-slate-800 p-2.5 rounded border shadow-sm">
+                                                                                     <span className="text-[10px] uppercase text-muted-foreground font-semibold">Route Decision</span>
+                                                                                     <div className="mt-1 font-mono text-xs text-indigo-600 dark:text-indigo-400">
+                                                                                         {debugPipelineTrace.route_decision.route} 
+                                                                                         {debugPipelineTrace.route_decision.tier > 0 && ` (Tier ${debugPipelineTrace.route_decision.tier})`}
+                                                                                     </div>
+                                                                                 </div>
+                                                                             )}
+                                                                         </div>
+                                                                     )}
+
+                                                                     {/* Semantic Routing card */}
+                                                                     {debugPipelineTrace.semantic_routing && (
+                                                                         <div className="bg-white dark:bg-slate-800 p-3 rounded border shadow-sm space-y-2 border-l-4 border-l-emerald-500">
+                                                                             <span className="text-[10px] uppercase text-muted-foreground font-bold flex items-center gap-1.5">
+                                                                                 <Layers className="w-3.5 h-3.5 text-emerald-500" />
+                                                                                 Semantic Routing
+                                                                             </span>
+                                                                             <div className="space-y-1">
+                                                                                 <div className="flex justify-between">
+                                                                                     <span className="text-slate-400">Category:</span>
+                                                                                     <span className="font-semibold">{debugPipelineTrace.semantic_routing.category}</span>
+                                                                                 </div>
+                                                                                 <div className="flex justify-between">
+                                                                                     <span className="text-slate-400">Strategy:</span>
+                                                                                     <span className={`font-mono px-1 rounded text-[10px] ${
+                                                                                         debugPipelineTrace.semantic_routing.strategy === 'fast' ? 'bg-green-100 text-green-800 dark:bg-green-950/20 dark:text-green-400' :
+                                                                                         debugPipelineTrace.semantic_routing.strategy === 'deep' ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/20 dark:text-amber-400' :
+                                                                                         debugPipelineTrace.semantic_routing.strategy === 'parallel' ? 'bg-purple-100 text-purple-800 dark:bg-purple-950/20 dark:text-purple-400' :
+                                                                                         'bg-blue-100 text-blue-800 dark:bg-blue-950/20 dark:text-blue-400'
+                                                                                     }`}>
+                                                                                         {debugPipelineTrace.semantic_routing.strategy?.toUpperCase()}
+                                                                                     </span>
+                                                                                 </div>
+                                                                                 <div className="flex justify-between text-[10px] text-slate-500 pt-1">
+                                                                                     <span>Top K: {debugPipelineTrace.semantic_routing.top_k}</span>
+                                                                                     <span>Rerank N: {debugPipelineTrace.semantic_routing.rerank_top_n}</span>
+                                                                                 </div>
+                                                                             </div>
+                                                                         </div>
+                                                                     )}
+
+                                                                     {/* Output Contract card */}
+                                                                     {debugPipelineTrace.output_contract && (
+                                                                         <div className="bg-white dark:bg-slate-800 p-3 rounded border shadow-sm space-y-2 border-l-4 border-l-blue-500">
+                                                                             <span className="text-[10px] uppercase text-muted-foreground font-bold flex items-center gap-1.5">
+                                                                                 <Settings className="w-3.5 h-3.5 text-blue-500" />
+                                                                                 Output Contract
+                                                                             </span>
+                                                                             <div className="space-y-1">
+                                                                                 <div className="flex justify-between">
+                                                                                     <span className="text-slate-400">Format:</span>
+                                                                                     <span className="font-semibold uppercase font-mono text-[10px]">{debugPipelineTrace.output_contract.format || debugPipelineTrace.output_contract.format_used}</span>
+                                                                                 </div>
+                                                                                 <div className="flex justify-between">
+                                                                                     <span className="text-slate-400">Compliance:</span>
+                                                                                     <span className={`font-mono px-1 rounded text-[10px] ${
+                                                                                         debugPipelineTrace.output_contract.contract_compliant ? 'bg-green-100 text-green-800 dark:bg-green-950/20 dark:text-green-400' : 'bg-red-100 text-red-800 dark:bg-red-950/20 dark:text-red-400'
+                                                                                     }`}>
+                                                                                         {debugPipelineTrace.output_contract.contract_compliant ? 'PASSED' : 'FAILED'}
+                                                                                     </span>
+                                                                                 </div>
+                                                                                 <div className="text-[9px] text-slate-500 space-y-0.5 border-t pt-1 mt-1">
+                                                                                     <div>Length Check: {debugPipelineTrace.output_contract.checks?.length_compliant ? '✅' : '❌'} ({debugPipelineTrace.output_contract.approximate_tokens} tokens)</div>
+                                                                                     <div>Citations: {debugPipelineTrace.output_contract.checks?.has_citations ? '✅' : '❌'}</div>
+                                                                                     <div>Bullet structure: {debugPipelineTrace.output_contract.checks?.has_bullet_structure ? '✅' : '❌'}</div>
+                                                                                 </div>
+                                                                             </div>
+                                                                         </div>
+                                                                     )}
+
+                                                                     {/* Compression Stats card */}
+                                                                     {debugPipelineTrace.compression_stats && (
+                                                                         <div className="bg-white dark:bg-slate-800 p-3 rounded border shadow-sm space-y-2 border-l-4 border-l-purple-500">
+                                                                             <span className="text-[10px] uppercase text-muted-foreground font-bold flex items-center gap-1.5">
+                                                                                 <Zap className="w-3.5 h-3.5 text-purple-500" />
+                                                                                 Compression Stats
+                                                                             </span>
+                                                                             <div className="space-y-1">
+                                                                                 <div className="flex justify-between">
+                                                                                     <span className="text-slate-400">Ratio:</span>
+                                                                                     <span className="font-semibold text-purple-600 dark:text-purple-400">{(debugPipelineTrace.compression_stats.compression_ratio * 100).toFixed(1)}%</span>
+                                                                                 </div>
+                                                                                 <div className="flex justify-between">
+                                                                                     <span className="text-slate-400">Sentences kept:</span>
+                                                                                     <span className="font-mono">{debugPipelineTrace.compression_stats.sentences_kept} / {debugPipelineTrace.compression_stats.sentences_kept + debugPipelineTrace.compression_stats.sentences_dropped}</span>
+                                                                                 </div>
+                                                                                 <div className="text-[10px] text-slate-550 dark:text-slate-400 text-right pt-1">
+                                                                                     Dropped {debugPipelineTrace.compression_stats.sentences_dropped} sentences
+                                                                                 </div>
+                                                                             </div>
+                                                                         </div>
+                                                                     )}
+
+                                                                     {/* Prompt Cache card */}
+                                                                     {debugPipelineTrace.prompt_cache_info && (
+                                                                         <div className="bg-white dark:bg-slate-800 p-3 rounded border shadow-sm space-y-2 border-l-4 border-l-indigo-500">
+                                                                             <span className="text-[10px] uppercase text-muted-foreground font-bold flex items-center gap-1.5">
+                                                                                 <Database className="w-3.5 h-3.5 text-indigo-500" />
+                                                                                 Prompt Caching
+                                                                             </span>
+                                                                             <div className="space-y-1">
+                                                                                 <div className="flex justify-between">
+                                                                                     <span className="text-slate-400">Provider:</span>
+                                                                                     <span className="font-semibold capitalize">{debugPipelineTrace.prompt_cache_info.provider}</span>
+                                                                                 </div>
+                                                                                 <div className="flex justify-between">
+                                                                                     <span className="text-slate-400">Savings Rate:</span>
+                                                                                     <span className="font-semibold text-emerald-600 dark:text-emerald-400">{debugPipelineTrace.prompt_cache_info.estimated_cache_savings_rate}</span>
+                                                                                 </div>
+                                                                                 <div className="flex justify-between text-[10px] text-slate-500 pt-1">
+                                                                                     <span>Est. monthly:</span>
+                                                                                     <span className="font-mono text-foreground font-semibold">${debugPipelineTrace.prompt_cache_info.estimated_monthly_savings_usd?.toFixed(2)}</span>
+                                                                                 </div>
+                                                                             </div>
+                                                                         </div>
+                                                                     )}
+
+                                                                     {/* RAGAS Metrics card */}
+                                                                     {debugPipelineTrace.ragas_metrics && (
+                                                                         <div className="bg-white dark:bg-slate-800 p-3 rounded border shadow-sm space-y-2 border-l-4 border-l-amber-500 col-span-2">
+                                                                             <span className="text-[10px] uppercase text-muted-foreground font-bold flex items-center gap-1.5">
+                                                                                 <BarChart3 className="w-3.5 h-3.5 text-amber-500" />
+                                                                                 RAGAS Inline Scores
+                                                                             </span>
+                                                                             <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-1">
+                                                                                 {Object.entries(debugPipelineTrace.ragas_metrics).map(([key, val]: [string, any]) => {
+                                                                                     if (key === 'overall_score' || key === 'hallucination_risk' || key === 'evaluation_method') return null;
+                                                                                     return (
+                                                                                         <div key={key} className="flex justify-between text-[11px]">
+                                                                                             <span className="text-slate-500 capitalize">{key.replace('_', ' ')}:</span>
+                                                                                             <span className="font-mono font-semibold">{val.score?.toFixed(2)} ({val.label})</span>
+                                                                                         </div>
+                                                                                     );
+                                                                                 })}
+                                                                                 <div className="col-span-2 border-t pt-1 mt-1 flex justify-between text-xs font-bold">
+                                                                                     <span>Overall Score:</span>
+                                                                                     <span className="text-indigo-600 dark:text-indigo-400">{debugPipelineTrace.ragas_metrics.overall_score?.toFixed(2)}</span>
+                                                                                 </div>
+                                                                             </div>
+                                                                         </div>
+                                                                     )}
+
+                                                                     {/* History-Aware Rewrite */}
+                                                                     {debugPipelineTrace.rewrite_info?.was_rewritten && (
+                                                                         <div className="col-span-2 bg-white dark:bg-slate-800 p-2.5 rounded border shadow-sm border-l-4 border-l-blue-400">
+                                                                             <span className="text-[10px] uppercase text-muted-foreground font-semibold">History-Aware Rewrite</span>
+                                                                             <div className="mt-1 space-y-1">
+                                                                                 <div className="text-[10px] text-slate-500 line-through">{debugPipelineTrace.rewrite_info.original_query}</div>
+                                                                                 <div className="font-mono text-xs text-blue-700 dark:text-blue-400">{debugPipelineTrace.rewrite_info.rewritten_query}</div>
+                                                                             </div>
+                                                                         </div>
+                                                                     )}
+
+                                                                     {/* Hard Constraints */}
+                                                                     {debugPipelineTrace.constraints_applied?.has_constraints && (
+                                                                         <div className="col-span-2 bg-white dark:bg-slate-800 p-2.5 rounded border shadow-sm border-l-4 border-l-amber-450">
+                                                                             <span className="text-[10px] uppercase text-muted-foreground font-semibold">Hard Constraints</span>
+                                                                             <div className="mt-1 flex flex-wrap gap-1">
+                                                                                 {debugPipelineTrace.constraints_applied.excluded_terms?.map((t: string, i: number) => (
+                                                                                     <span key={`ex-${i}`} className="bg-rose-105 text-rose-800 px-1 rounded text-[10px] font-mono">NOT {t}</span>
+                                                                                 ))}
+                                                                                 {debugPipelineTrace.constraints_applied.doc_types?.map((t: string, i: number) => (
+                                                                                     <span key={`dt-${i}`} className="bg-amber-105 text-amber-800 px-1 rounded text-[10px] font-mono">TYPE: {t}</span>
+                                                                                 ))}
+                                                                             </div>
+                                                                         </div>
+                                                                     )}
+                                                                 </div>
+                                                                )}
 
                                                                 <div className="relative border-l-2 border-slate-200 dark:border-slate-700 ml-3 pl-4 space-y-4 text-left">
                                                                     {Object.entries(debugPipelineTrace.stages || {}).map(([sName, sTrace]: [string, any]) => (

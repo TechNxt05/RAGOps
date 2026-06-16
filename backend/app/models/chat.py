@@ -25,3 +25,4 @@ class Message(SQLModel, table=True):
     
     # Store full generation config (Model, Temp, Chunk Size, etc.)
     usage_metadata: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
+    ragas_scores: Optional[Dict[str, Any]] = Field(default=None, sa_column=Column(JSON))

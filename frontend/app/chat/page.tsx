@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Send, Bot, User as UserIcon, FileText, Settings, Folder, ChevronRight, Menu, MessageSquare, Trash2, Plus, Info } from 'lucide-react';
+import { Send, Bot, User as UserIcon, FileText, Settings, Folder, ChevronRight, Menu, MessageSquare, Trash2, Plus, Info, AlertTriangle, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -39,6 +39,11 @@ interface Message {
     attempts?: number;
     strategies_tried?: string[];
     answered?: boolean;
+    conflict_detection?: Record<string, any> | null;
+    not_found_proof?: string | null;
+    ragas_metrics?: ChatMessageResponse['ragas_metrics'];
+    output_contract?: ChatMessageResponse['output_contract'];
+    pipeline_trace?: ChatMessageResponse['pipeline_trace'];
 }
 
 export default function ChatPage() {
@@ -188,12 +193,33 @@ export default function ChatPage() {
                         quality_label: String(q.quality_label),
                     };
                 }
+                const ragasScores = (m as any).ragas_scores;
+                let ragas_metrics: ChatMessageResponse['ragas_metrics'] | undefined;
+                if (ragasScores && typeof ragasScores === 'object') {
+                    const getLabel = (score: number) => {
+                        if (score >= 0.8) return 'excellent';
+                        if (score >= 0.65) return 'good';
+                        if (score >= 0.5) return 'acceptable';
+                        if (score >= 0.35) return 'poor';
+                        return 'failing';
+                    };
+                    ragas_metrics = {
+                        context_relevance: { score: Number(ragasScores.context_relevance ?? 0), label: getLabel(Number(ragasScores.context_relevance ?? 0)), description: 'How relevant were retrieved chunks to your query' },
+                        faithfulness: { score: Number(ragasScores.faithfulness ?? 0), label: getLabel(Number(ragasScores.faithfulness ?? 0)), description: 'How well the answer is supported by retrieved context' },
+                        answer_relevance: { score: Number(ragasScores.answer_relevance ?? 0), label: getLabel(Number(ragasScores.answer_relevance ?? 0)), description: 'How directly the answer addresses your question' },
+                        groundedness: { score: Number(ragasScores.groundedness ?? 0), label: getLabel(Number(ragasScores.groundedness ?? 0)), description: 'How much the answer relies on retrieved sources vs model knowledge' },
+                        overall_score: Number(ragasScores.overall_score ?? 0),
+                        hallucination_risk: String(ragasScores.hallucination_risk ?? 'low')
+                    };
+                }
+
                 return {
                     role: m.role as "user" | "assistant",
                     content: m.content,
                     usage_metadata: um ?? undefined,
                     sources,
                     quality: quality ?? undefined,
+                    ragas_metrics
                 };
             });
             setMessages(uiMsgs);
@@ -276,6 +302,11 @@ export default function ChatPage() {
                 attempts: res.attempts,
                 strategies_tried: res.strategies_tried,
                 answered: res.answered,
+                conflict_detection: res.conflict_detection ?? undefined,
+                not_found_proof: res.not_found_proof ?? undefined,
+                ragas_metrics: res.ragas_metrics ?? undefined,
+                output_contract: res.output_contract ?? undefined,
+                pipeline_trace: res.pipeline_trace ?? undefined,
             };
 
             setMessages(prev => [...prev, botMsg]);
@@ -659,6 +690,29 @@ export default function ChatPage() {
                                                 }`}>
                                                 {msg.content}
 
+                                                {msg.role === 'assistant' && msg.conflict_detection?.has_conflicts && (
+                                                    <div className="mt-3 flex gap-2 items-start bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 p-3 rounded-2xl border border-amber-200 dark:border-amber-900/40 text-xs">
+                                                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+                                                        <div className="space-y-1">
+                                                            <span className="font-semibold block text-left">Conflicting Sources Detected:</span>
+                                                            <div className="space-y-0.5 text-left text-muted-foreground">
+                                                                {msg.conflict_detection.conflict_pairs.map((pair: any, pIdx: number) => (
+                                                                    <div key={pIdx}>
+                                                                        • Contradictory values between <span className="font-semibold text-foreground">{pair.chunk_a_source}</span> and <span className="font-semibold text-foreground">{pair.chunk_b_source}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {msg.role === 'assistant' && msg.not_found_proof === 'verified_absent' && (
+                                                    <div className="mt-3 flex gap-2 items-center bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-350 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs">
+                                                        <Shield className="w-4 h-4 shrink-0 text-slate-500" />
+                                                        <span className="font-medium">Verified: this information is not in the knowledge base</span>
+                                                    </div>
+                                                )}
+
                                                 {msg.role === 'assistant' && msg.usage_metadata && (
                                                     <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 flex justify-end">
                                                         <Popover>
@@ -714,6 +768,69 @@ export default function ChatPage() {
                                             </div>
                                         )}
 
+                                        {msg.role === 'assistant' && msg.ragas_metrics && (
+                                            <div className="ml-2 mt-2 p-3 bg-slate-50 dark:bg-slate-900 border dark:border-slate-850 rounded-2xl space-y-3 shadow-inner">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">RAGAS Evaluation Triad + Groundedness</span>
+                                                    <Badge variant="outline" className={`text-[9px] uppercase font-mono ${
+                                                        msg.ragas_metrics.hallucination_risk === 'low' 
+                                                            ? 'bg-emerald-55 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400 border-emerald-200'
+                                                            : msg.ragas_metrics.hallucination_risk === 'medium'
+                                                            ? 'bg-amber-55 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400 border-amber-200'
+                                                            : 'bg-rose-55 text-rose-700 dark:bg-rose-950/20 dark:text-rose-400 border-rose-200'
+                                                    }`}>
+                                                        Risk: {msg.ragas_metrics.hallucination_risk}
+                                                    </Badge>
+                                                </div>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    {(['context_relevance', 'faithfulness', 'answer_relevance', 'groundedness'] as const).map(key => {
+                                                        const metric = msg.ragas_metrics?.[key];
+                                                        if (!metric) return null;
+                                                        const score = metric.score;
+                                                        const label = metric.label;
+                                                        const desc = metric.description;
+                                                        const colorClass = score >= 0.65 
+                                                            ? 'bg-emerald-500' 
+                                                            : score >= 0.35 
+                                                            ? 'bg-amber-500' 
+                                                            : 'bg-rose-500';
+                                                        const textClass = score >= 0.65
+                                                            ? 'text-emerald-600 dark:text-emerald-450'
+                                                            : score >= 0.35
+                                                            ? 'text-amber-600 dark:text-amber-450'
+                                                            : 'text-rose-600 dark:text-rose-450';
+                                                        return (
+                                                            <div key={key} className="space-y-1">
+                                                                <div className="flex justify-between items-center text-xs">
+                                                                    <TooltipProvider>
+                                                                        <Tooltip>
+                                                                            <TooltipTrigger asChild>
+                                                                                <span className="font-semibold text-slate-650 dark:text-slate-350 cursor-help border-b border-dotted border-slate-400">
+                                                                                    {key.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                                                                                </span>
+                                                                            </TooltipTrigger>
+                                                                            <TooltipContent className="max-w-xs text-xs">
+                                                                                {desc}
+                                                                            </TooltipContent>
+                                                                        </Tooltip>
+                                                                    </TooltipProvider>
+                                                                    <span className={`font-mono font-bold ${textClass}`}>
+                                                                        {score.toFixed(2)} ({label})
+                                                                    </span>
+                                                                </div>
+                                                                <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                                    <div className={`h-full ${colorClass} rounded-full transition-all`} style={{ width: `${score * 100}%` }} />
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <div className="text-[10px] text-slate-400 dark:text-slate-500 text-right">
+                                                    Overall score: <span className="font-bold text-slate-600 dark:text-slate-450 font-mono">{(msg.ragas_metrics.overall_score || 0).toFixed(2)}</span>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {msg.role === "assistant" && user.role === "admin" && (() => {
                                             const raw = msg.quality ?? msg.usage_metadata?.quality;
                                             if (!raw || typeof raw !== "object") return null;
@@ -750,7 +867,7 @@ export default function ChatPage() {
                                                         <ChevronRight className="w-3.5 h-3.5 transition-transform group-open:rotate-90 text-slate-400" />
                                                     </summary>
                                                     <div className="p-3.5 border-t dark:border-slate-800 space-y-3.5 text-xs bg-white/70 dark:bg-slate-900/70">
-                                                        {msg.agent_trace.map((step, idx) => {
+                                                        {msg.agent_trace!.map((step, idx) => {
                                                             const isHigh = step.confidence >= 0.75;
                                                             
                                                             let statusIcon = "🔄";
@@ -759,14 +876,14 @@ export default function ChatPage() {
                                                             if (isHigh) {
                                                                 statusIcon = "✅";
                                                                 badgeColor = "bg-green-100 text-green-800 dark:bg-green-950/30 dark:text-green-400 border border-green-200 dark:border-green-900/50";
-                                                            } else if (step.action_taken.toLowerCase().includes("cannot answer") || (idx === msg.agent_trace.length - 1 && msg.answered === false)) {
+                                                            } else if (step.action_taken.toLowerCase().includes("cannot answer") || (idx === msg.agent_trace!.length - 1 && msg.answered === false)) {
                                                                 statusIcon = "❌";
                                                                 badgeColor = "bg-red-100 text-red-800 dark:bg-red-950/30 dark:text-red-400 border border-red-200 dark:border-red-900/50";
                                                             }
                                                             
                                                             return (
                                                                 <div key={idx} className="flex gap-3 items-start relative pb-3 last:pb-0">
-                                                                    {idx < msg.agent_trace.length - 1 && (
+                                                                    {idx < msg.agent_trace!.length - 1 && (
                                                                         <div className="absolute left-[9px] top-6 bottom-0 w-[1px] bg-slate-200 dark:bg-slate-800" />
                                                                     )}
                                                                     <span className="text-xs shrink-0 mt-0.5 select-none">{statusIcon}</span>

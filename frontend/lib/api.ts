@@ -57,6 +57,7 @@ export interface Document {
   processing_status?: string;
   processing_error?: string | null;
   uploaded_by?: number | null;
+  redaction_log?: Record<string, any> | null;
   chunking_strategy?: string | null;
   chunking_metrics?: {
     composite_score: number;
@@ -124,6 +125,30 @@ export interface ChatMessageResponse {
   attempts?: number;
   strategies_tried?: string[];
   answered?: boolean;
+  conflict_detection?: Record<string, any> | null;
+  not_found_proof?: string | null;
+  ragas_metrics?: {
+    context_relevance: { score: number; label: string; description: string };
+    faithfulness: { score: number; label: string; description: string };
+    answer_relevance: { score: number; label: string; description: string };
+    groundedness: { score: number; label: string; description: string };
+    overall_score: number;
+    hallucination_risk: string;
+    evaluation_method?: string;
+  } | null;
+  output_contract?: {
+    format: string;
+    max_tokens: number;
+    contract_compliant: boolean;
+    checks: {
+      length_compliant: boolean;
+      has_citations: boolean;
+      sentence_count_compliant: boolean;
+      has_bullet_structure: boolean;
+    };
+    approximate_tokens: number;
+  } | null;
+  pipeline_trace?: Record<string, any> | null;
 }
 
 
@@ -143,6 +168,12 @@ export interface ProjectAnalytics {
     date: string;
     avg_hallucination: number | null;
     avg_faithfulness: number | null;
+    avg_context_relevance: number | null;
+    avg_ragas_faithfulness: number | null;
+    avg_answer_relevance: number | null;
+    avg_groundedness: number | null;
+    avg_overall_ragas: number | null;
+    avg_compression_ratio: number | null;
   }[];
   agentic_metrics?: {
     total_agentic_queries: number;
@@ -150,6 +181,13 @@ export interface ProjectAnalytics {
     avg_agentic_attempts: number;
     most_common_fallbacks: { strategy: string; count: number }[];
   };
+  avg_context_relevance: number;
+  avg_ragas_faithfulness: number;
+  avg_answer_relevance: number;
+  avg_groundedness: number;
+  avg_overall_ragas: number;
+  avg_compression_ratio: number;
+  avg_cache_savings_usd: number;
 }
 
 export interface CompareSide {

@@ -37,5 +37,6 @@ class QueryLog(SQLModel, table=True):
 
     # Failure tracing & pipeline details
     pipeline_trace: Optional[dict] = Field(default=None, sa_column=Column(JSON))
+    ragas_scores: Optional[dict] = Field(default=None, sa_column=Column(JSON))
 
     created_at: datetime = Field(default_factory=datetime.utcnow)

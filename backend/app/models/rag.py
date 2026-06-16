@@ -8,6 +8,8 @@ class Project(SQLModel, table=True):
     name: str = Field(index=True)
     description: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    kb_version: int = Field(default=1)
+    kb_version_updated_at: Optional[datetime] = Field(default=None)
 
 class RAGConfig(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -49,6 +51,7 @@ class RAGConfig(SQLModel, table=True):
     # Hybrid Search Settings
     use_hybrid_search: bool = Field(default=True)
     semantic_weight: float = Field(default=0.6)  # 0.6 semantic, 0.4 BM25
+    use_multi_query: bool = Field(default=True)
 
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -74,6 +77,10 @@ class Document(SQLModel, table=True):
 
     chunking_strategy: Optional[str] = Field(default=None)
     chunking_metrics: Optional[dict] = Field(default=None, sa_column=Column(JSON))
+    document_hash: Optional[str] = Field(default=None, max_length=64)
+    parsing_method: Optional[str] = Field(default=None, max_length=64)
+    redaction_log: Optional[dict] = Field(default=None, sa_column=Column(JSON))
+    parsed_chunks_json: Optional[dict] = Field(default=None, sa_column=Column(JSON))
 
 class Chunk(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -81,3 +88,7 @@ class Chunk(SQLModel, table=True):
     content: str
     index_id: Optional[int] = None # Mapping to FAISS ID if needed
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    content_hash: Optional[str] = Field(default=None, max_length=64)
+    chunk_version: int = Field(default=1)
+    doc_id_version: Optional[str] = Field(default=None, max_length=256)
+    chunk_index: Optional[int] = Field(default=None)

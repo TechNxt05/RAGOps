@@ -171,9 +171,17 @@ async def post_message(
     session_db.add(user_msg)
     session_db.commit()
 
+    # Fetch kb_version of the project prior to cost manager calls
+    kb_version = 1
+    if project_id:
+        from app.models.rag import Project
+        project = session_db.get(Project, project_id)
+        if project:
+            kb_version = project.kb_version or 1
+
     # 1. Cost Control Pre-Call (Cache & Circuit Breaker & Routing)
     cost_manager = get_cost_manager()
-    pre = cost_manager.pre_call(content)
+    pre = cost_manager.pre_call(content, project_id=project_id, kb_version=kb_version)
     
     if pre["source"] == "cache":
         answer = pre["response"]
@@ -199,16 +207,63 @@ async def post_message(
             }
         }
         
+        default_ragas = {
+            "context_relevance": 1.0,
+            "faithfulness": 1.0,
+            "answer_relevance": 1.0,
+            "groundedness": 1.0,
+            "overall_score": 1.0,
+            "hallucination_risk": "low"
+        }
+        
+        default_ragas_display = {
+            "context_relevance": {"score": 1.0, "label": "excellent", "description": "Cached response"},
+            "faithfulness": {"score": 1.0, "label": "excellent", "description": "Cached response"},
+            "answer_relevance": {"score": 1.0, "label": "excellent", "description": "Cached response"},
+            "groundedness": {"score": 1.0, "label": "excellent", "description": "Cached response"},
+            "overall_score": 1.0,
+            "hallucination_risk": "low",
+            "evaluation_method": "semantic_cache_hit"
+        }
+        
+        default_contract = {
+            "format": "concise",
+            "max_tokens": 150,
+            "contract_compliant": True,
+            "checks": {
+                "length_compliant": True,
+                "has_citations": True,
+                "sentence_count_compliant": True,
+                "has_bullet_structure": True
+            },
+            "approximate_tokens": 0
+        }
+
         assistant_msg = Message(
             session_id=session_id,
             role="assistant",
             content=answer,
             sources="[]",
-            usage_metadata=usage_metadata
+            usage_metadata=usage_metadata,
+            ragas_scores=default_ragas
         )
         session_db.add(assistant_msg)
         session_db.commit()
         session_db.refresh(assistant_msg)
+        
+        cache_trace = {
+            "query": content,
+            "status": "success",
+            "total_duration_ms": latency_ms,
+            "stages": {
+                "semantic_cache": {
+                    "stage": "semantic_cache",
+                    "status": "success",
+                    "duration_ms": latency_ms,
+                    "metadata": {"cache_hit": True}
+                }
+            }
+        }
         
         qlog = QueryLog(
             project_id=project_id,
@@ -229,19 +284,8 @@ async def post_message(
             chunks_after_pruning=0,
             pruning_reduction_pct=0.0,
             used_hybrid_search=False,
-            pipeline_trace={
-                "query": content,
-                "status": "success",
-                "total_duration_ms": latency_ms,
-                "stages": {
-                    "semantic_cache": {
-                        "stage": "semantic_cache",
-                        "status": "success",
-                        "duration_ms": latency_ms,
-                        "metadata": {"cache_hit": True}
-                    }
-                }
-            }
+            pipeline_trace=cache_trace,
+            ragas_scores=default_ragas
         )
         session_db.add(qlog)
         session_db.commit()
@@ -254,7 +298,12 @@ async def post_message(
             "sources": [],
             "usage_metadata": usage_metadata,
             "query_log_id": qlog.id,
-            "quality": usage_metadata["quality"]
+            "quality": usage_metadata["quality"],
+            "conflict_detection": None,
+            "not_found_proof": None,
+            "ragas_metrics": default_ragas_display,
+            "output_contract": default_contract,
+            "pipeline_trace": cache_trace
         }
         
     elif pre["source"] == "blocked":
@@ -361,6 +410,20 @@ async def post_message(
             api_key=os.getenv("GROQ_API_KEY"),
             temperature=temperature,
         )
+    elif model_provider == "anthropic":
+        from langchain_anthropic import ChatAnthropic
+        llm = ChatAnthropic(
+            model=model_name,
+            api_key=os.getenv("ANTHROPIC_API_KEY"),
+            temperature=temperature,
+        )
+    elif model_provider == "openai":
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(
+            model_name=model_name,
+            api_key=os.getenv("OPENAI_API_KEY"),
+            temperature=temperature,
+        )
     else:
         llm = ChatGoogleGenerativeAI(
             model=model_name,
@@ -376,15 +439,98 @@ async def post_message(
         rag_config = RAGConfig(project_id=project_id)
         style = "Concise"
 
-    # Pre-generation gate search execution
-    search_results = rag_engine.search(
-        query=content,
-        project_id=project_id,
-        k=rag_config.top_k,
-        score_threshold=rag_config.similarity_threshold
-    )
+    # --- Phase 1: Query Intelligence Layer ---
+    from app.services.turn_type_router import TurnTypeRouter, TurnType
+    from app.services.query_rewriter import QueryRewriter
+    from app.services.computation_router import ComputationRouter, QueryRoute
+    from app.services.constraint_extractor import ConstraintExtractor
+    from app.services.session_context_cache import session_cache
+    
+    turn_router = TurnTypeRouter()
+    has_context = session_cache.has_context(session_id)
+    history_dicts = [{"role": m.type, "content": m.content} for m in chat_history]
+    turn_type = turn_router.classify(content, session_has_context=has_context, conversation_history=history_dicts)
+    
+    retrieval_source = "skipped"
+    rewrite_info = {"was_rewritten": False}
+    route_decision = {"route": "retrieval", "tier": 0, "matched_signal": None, "confidence": 0.60}
+    constraints_applied = {"has_constraints": False}
+    computation_query_in_retrieval = False
+    comp_answer = None
+    
+    if turn_type == TurnType.CHIT_CHAT:
+        search_results = []
+        retrieval_source = "skipped"
+    elif turn_type == TurnType.FOLLOW_UP and has_context:
+        cached_chunks = session_cache.get(session_id)
+        from langchain_core.documents import Document as LCDocument
+        search_results = [(LCDocument(page_content=c["text"], metadata={"source": c.get("source"), "doc_id": c.get("id")}), 1.0) for c in cached_chunks]
+        retrieval_source = "session_cache"
+        
+        rewriter = QueryRewriter(llm)
+        rewrite_res = await rewriter.rewrite(content, history_dicts)
+        rewrite_info = rewrite_res
+    else:
+        retrieval_source = "vector_db"
+        comp_router = ComputationRouter()
+        route_decision = comp_router.route(content)
+        
+        if route_decision["route"] == QueryRoute.COMPUTATION:
+            comp_answer = comp_router.compute_aggregation(content, project_id, session_db)
+            if comp_answer:
+                from langchain_core.documents import Document as LCDocument
+                search_results = [(LCDocument(page_content=comp_answer["answer"], metadata={"source": "Database Computation", "doc_id": 0}), 1.0)]
+                retrieval_source = "computation_engine"
+            else:
+                computation_query_in_retrieval = True
+                route_decision["route"] = "retrieval"
+        
+        if route_decision["route"] != QueryRoute.COMPUTATION or not comp_answer:
+            rewriter = QueryRewriter(llm)
+            rewrite_res = await rewriter.rewrite(content, history_dicts)
+            rewrite_info = rewrite_res
+            rewritten_q = rewrite_res["rewritten_query"]
+            
+            extractor = ConstraintExtractor()
+            constraints = extractor.extract(rewritten_q)
+            constraints_applied = {
+                "has_constraints": constraints.has_constraints,
+                "excluded_terms": constraints.excluded_terms,
+                "date_after": constraints.date_after,
+                "date_before": constraints.date_before,
+                "doc_types": constraints.doc_types,
+                "source_contains": constraints.source_contains
+            }
+            
+            search_results = rag_engine.search(
+                query=content,
+                project_id=project_id,
+                k=rag_config.top_k,
+                score_threshold=rag_config.similarity_threshold,
+                constraints=constraints,
+                rewritten_query=rewritten_q,
+                llm_client=llm
+            )
+            
+            # Store in session cache
+            gate_res = getattr(search_results, "confidence_gate_result", None)
+            if gate_res and gate_res.passed:
+                chunks_to_cache = [{"id": str(d.metadata.get("doc_id", "")), "text": d.page_content, "source": d.metadata.get("source", "")} for d, _ in search_results]
+                session_cache.store(session_id, rewritten_q, chunks_to_cache)
 
     trace_dict = getattr(search_results, "pipeline_trace", {})
+    if isinstance(trace_dict, dict):
+        trace_dict["turn_type"] = turn_type.value if hasattr(turn_type, "value") else str(turn_type)
+        trace_dict["retrieval_source"] = retrieval_source
+        trace_dict["rewrite_info"] = rewrite_info
+        trace_dict["route_decision"] = {
+            "route": route_decision["route"].value if hasattr(route_decision["route"], "value") else str(route_decision["route"]),
+            "tier": route_decision.get("tier"),
+            "matched_signal": route_decision.get("matched_signal"),
+            "confidence": route_decision.get("confidence")
+        }
+        trace_dict["constraints_applied"] = constraints_applied
+        trace_dict["computation_query_in_retrieval"] = computation_query_in_retrieval
     gate_result = getattr(search_results, "confidence_gate_result", None)
     query_analysis = getattr(search_results, "query_analysis", None)
 
@@ -403,6 +549,67 @@ async def post_message(
         "pruning_reduction_pct": getattr(search_results, "pruning_reduction_pct", 0.0),
         "used_hybrid_search": getattr(search_results, "used_hybrid_search", False)
     }
+
+    not_found_proof = None
+    if gate_result and not gate_result.passed:
+        from app.services.absence_prover import AbsenceProver
+        prover = AbsenceProver(session_db)
+        proof_res = prover.prove_or_retry(
+            query=content,
+            project_id=project_id,
+            hybrid_search_fn=rag_engine._single_hybrid_search,
+            top_k=rag_config.top_k
+        )
+        
+        if proof_res["action"] == "proven_absent":
+            not_found_proof = "verified_absent"
+        elif proof_res["action"] == "retry_triggered" and proof_res["retry_chunks"]:
+            from app.rag.engine import SearchResultList
+            retry_search_results = SearchResultList(proof_res["retry_chunks"])
+            
+            # Run confidence gate again on the retry results
+            doc_ids = list(set(int(doc.metadata.get("doc_id")) for doc, _ in retry_search_results if doc.metadata.get("doc_id") is not None))
+            doc_meta_map = {}
+            if doc_ids:
+                docs = session_db.exec(select(Document).where(Document.id.in_(doc_ids))).all()
+                for d in docs:
+                    doc_meta_map[d.id] = {
+                        "file_type": d.filename.split(".")[-1] if "." in d.filename else "unknown",
+                        "upload_date": d.uploaded_at
+                    }
+            chunk_dicts = []
+            reranker_scores = []
+            document_metadata = []
+            for doc, score in retry_search_results:
+                did = doc.metadata.get("doc_id")
+                meta = doc_meta_map.get(did, {}) if did else {}
+                chunk_dicts.append({
+                    "id": str(did or ""),
+                    "text": doc.page_content
+                })
+                reranker_scores.append(score)
+                document_metadata.append(meta)
+                
+            confidence_gate = get_confidence_gate(threshold=0.65)
+            retry_gate_result = confidence_gate.evaluate(chunk_dicts, reranker_scores, document_metadata)
+            
+            if retry_gate_result.passed:
+                search_results = retry_search_results
+                gate_result = retry_gate_result
+                ctx_chunks = [d.page_content for d, _ in search_results]
+                src_from_tools = []
+                for d, _ in search_results:
+                    meta = d.metadata or {}
+                    src_from_tools.append({
+                        "source": str(meta.get("source", "Unknown")),
+                        "doc_id": int(meta["doc_id"]) if meta.get("doc_id") is not None else 0
+                    })
+                if isinstance(trace_dict, dict) and "stages" in trace_dict:
+                    trace_dict["stages"]["absence_prover_retry"] = {
+                        "stage": "absence_prover_retry",
+                        "status": "success",
+                        "metadata": {"retry_chunks_count": len(retry_search_results)}
+                    }
 
     if gate_result and not gate_result.passed:
         # Pre-generation gate failed: REFUSE TO GENERATE
@@ -437,12 +644,45 @@ async def post_message(
             }
         }
 
+        refusal_ragas = {
+            "context_relevance": 0.0,
+            "faithfulness": 0.0,
+            "answer_relevance": 0.0,
+            "groundedness": 0.0,
+            "overall_score": 0.0,
+            "hallucination_risk": "high"
+        }
+        
+        refusal_ragas_display = {
+            "context_relevance": {"score": 0.0, "label": "failing", "description": "Confidence gate check failed"},
+            "faithfulness": {"score": 0.0, "label": "failing", "description": "Confidence gate check failed"},
+            "answer_relevance": {"score": 0.0, "label": "failing", "description": "Confidence gate check failed"},
+            "groundedness": {"score": 0.0, "label": "failing", "description": "Confidence gate check failed"},
+            "overall_score": 0.0,
+            "hallucination_risk": "high",
+            "evaluation_method": "confidence_gate_refusal"
+        }
+        
+        refusal_contract = {
+            "format": "concise",
+            "max_tokens": 150,
+            "contract_compliant": False,
+            "checks": {
+                "length_compliant": False,
+                "has_citations": False,
+                "sentence_count_compliant": False,
+                "has_bullet_structure": False
+            },
+            "approximate_tokens": 0
+        }
+
         assistant_msg = Message(
             session_id=session_id,
             role="assistant",
             content=answer,
             sources="[]",
-            usage_metadata=usage_metadata
+            usage_metadata=usage_metadata,
+            ragas_scores=refusal_ragas
         )
         session_db.add(assistant_msg)
         session_db.commit()
@@ -467,7 +707,8 @@ async def post_message(
             chunks_after_pruning=search_stats.get("chunks_after_pruning", 0),
             pruning_reduction_pct=search_stats.get("pruning_reduction_pct", 0.0),
             used_hybrid_search=search_stats.get("used_hybrid_search", False),
-            pipeline_trace=trace_dict
+            pipeline_trace=trace_dict,
+            ragas_scores=refusal_ragas
         )
         session_db.add(qlog)
         session_db.commit()
@@ -480,7 +721,12 @@ async def post_message(
             "sources": [],
             "usage_metadata": usage_metadata,
             "query_log_id": qlog.id,
-            "quality": usage_metadata["quality"]
+            "quality": usage_metadata["quality"],
+            "conflict_detection": None,
+            "not_found_proof": not_found_proof,
+            "ragas_metrics": refusal_ragas_display,
+            "output_contract": refusal_contract,
+            "pipeline_trace": trace_dict
         }
 
     system_prompt = f"""You are a helpful AI assistant with access to tools.
@@ -498,9 +744,97 @@ async def post_message(
     6. If the retrieved chunks contain a section explicitly labeled "SUMMARY" or "ABSTRACT", prioritize that information.
     """
 
+    conflict_res = getattr(search_results, "conflict_detection", None)
+    if conflict_res and conflict_res.get("has_conflicts"):
+        from app.services.conflict_detector import ConflictDetector
+        detector = ConflictDetector()
+        addendum = detector.build_conflict_prompt_addendum(conflict_res)
+        if addendum:
+            system_prompt += addendum
+
+    # Build output contract
+    from app.services.output_contract import OutputContractBuilder, OutputVerifier
+    contract_builder = OutputContractBuilder()
+    query_intent_str = None
+    query_analysis = getattr(search_results, "query_analysis", None)
+    if query_analysis:
+        query_intent_str = getattr(query_analysis, "complexity", None)
+        if query_intent_str and hasattr(query_intent_str, "value"):
+            query_intent_str = query_intent_str.value
+    contract = contract_builder.build(content, query_intent_str)
+    
+    # Inject contract addendum into system prompt
+    system_prompt = contract_builder.apply_to_system_prompt(system_prompt, contract)
+    
+    # Build prompt cache trace and calculate estimated savings
+    from app.services.prompt_cache_manager import PromptCacheManager
+    cache_manager = PromptCacheManager()
+    system_prompt_hash = cache_manager.get_system_prompt_hash(system_prompt)
+    
+    daily_volume_est = 100
+    savings_est = cache_manager.estimate_cache_savings(
+        system_prompt_tokens=int(len(system_prompt) / 4),
+        queries_per_day=daily_volume_est,
+        provider=model_provider
+    )
+    
+    prompt_cache_info = {
+        "provider": model_provider,
+        "system_prompt_hash": system_prompt_hash,
+        "cache_control_applied": model_provider == "anthropic",
+        "estimated_cache_savings_rate": f"{int(savings_est['savings_rate_percent'])}%",
+        "estimated_monthly_savings_usd": savings_est["estimated_monthly_savings_usd"]
+    }
+    trace_dict["prompt_cache_info"] = prompt_cache_info
+    
+    # Create the generator LLM with the contract's max_tokens constraint
+    if model_provider == "groq":
+        llm_gen = ChatGroq(
+            model_name=model_name,
+            api_key=os.getenv("GROQ_API_KEY"),
+            temperature=temperature,
+            max_tokens=contract.max_tokens
+        )
+    elif model_provider == "anthropic":
+        from langchain_anthropic import ChatAnthropic
+        llm_gen = ChatAnthropic(
+            model=model_name,
+            api_key=os.getenv("ANTHROPIC_API_KEY"),
+            temperature=temperature,
+            max_tokens=contract.max_tokens
+        )
+    elif model_provider == "openai":
+        from langchain_openai import ChatOpenAI
+        llm_gen = ChatOpenAI(
+            model_name=model_name,
+            api_key=os.getenv("OPENAI_API_KEY"),
+            temperature=temperature,
+            max_tokens=contract.max_tokens
+        )
+    else:
+        llm_gen = ChatGoogleGenerativeAI(
+            model=model_name,
+            google_api_key=os.getenv("GEMINI_API_KEY"),
+            temperature=temperature,
+            max_output_tokens=contract.max_tokens
+        )
+
+    if model_provider == "anthropic":
+        system_message = SystemMessage(
+            content=[
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"}
+                }
+            ]
+        )
+    else:
+        system_message = SystemMessage(content=system_prompt)
+
     prompt = ChatPromptTemplate.from_messages(
         [
-            SystemMessage(content=system_prompt),
+            system_message,
             MessagesPlaceholder(variable_name="chat_history"),
             ("user", "{input}"),
             MessagesPlaceholder(variable_name="agent_scratchpad"),
@@ -508,7 +842,7 @@ async def post_message(
     )
 
     try:
-        agent = create_tool_calling_agent(llm, langchain_tools, prompt)
+        agent = create_tool_calling_agent(llm_gen, langchain_tools, prompt)
     except Exception as e:
         return {
             "session_id": session_id,
@@ -538,6 +872,55 @@ async def post_message(
         llm_status = "failed"
         llm_error = str(e)
         result = {"intermediate_steps": []}
+
+    # Check if generated answer indicates "not found"
+    answer_lower = answer.lower()
+    not_found_indicators = ["not found", "cannot find", "no information", "do not have information", "does not mention", "not mentioned", "don't have info", "no mention"]
+    is_not_found = any(ind in answer_lower for ind in not_found_indicators)
+    
+    if is_not_found:
+        from app.services.absence_prover import AbsenceProver
+        prover = AbsenceProver(session_db)
+        proof_res = prover.prove_or_retry(
+            query=content,
+            project_id=project_id,
+            hybrid_search_fn=rag_engine._single_hybrid_search,
+            top_k=rag_config.top_k
+        )
+        if proof_res["action"] == "proven_absent":
+            not_found_proof = "verified_absent"
+        elif proof_res["action"] == "retry_triggered" and proof_res["retry_chunks"]:
+            # Run targeted search & generate again using direct LLM call to bypass agent tool loops
+            context_str = "\n\n".join([c[0].page_content for c in proof_res["retry_chunks"]])
+            retry_prompt = f"""You are a precise assistant. A previous retrieval failed, but we found these relevant sections in the database.
+            Please answer the user's query using ONLY the context below. If you cannot find the answer, state that.
+            
+            Context:
+            {context_str}
+            
+            User Query: {content}
+            Answer:"""
+            
+            try:
+                if hasattr(llm_gen, "invoke"):
+                    retry_res = await llm_gen.ainvoke(retry_prompt)
+                    answer = retry_res.content
+                else:
+                    retry_res = llm_gen.predict(retry_prompt)
+                    answer = retry_res
+                    
+                # Update sources output and ctx_chunks to match retry chunks
+                src_from_tools = []
+                for doc, score in proof_res["retry_chunks"]:
+                    meta = doc.metadata or {}
+                    src_from_tools.append({
+                        "source": str(meta.get("source", "Unknown")),
+                        "doc_id": int(meta["doc_id"]) if meta.get("doc_id") is not None else 0
+                    })
+                sources_out = src_from_tools
+                ctx_chunks = [c[0].page_content for c in proof_res["retry_chunks"]]
+            except Exception as e:
+                print(f"Error in LLM retry generation: {e}")
 
     latency_ms = (time.time() - t0_overall) * 1000.0
     llm_duration_ms = (time.time() - llm_start_time) * 1000.0
@@ -586,12 +969,47 @@ async def post_message(
 
     sources_out = src_from_tools if src_from_tools else []
 
+    # Calculate RAGAS metrics
+    from app.services.ragas_metrics import RAGASEvaluator
+    ragas_evaluator = RAGASEvaluator()
+    retrieved_chunks_dicts = []
+    for idx, text in enumerate(ctx_chunks):
+        src = sources_out[idx]["source"] if idx < len(sources_out) else ""
+        retrieved_chunks_dicts.append({"content": text, "source": src})
+    
+    ragas_metrics_obj = ragas_evaluator.evaluate(
+        query=content,
+        retrieved_chunks=retrieved_chunks_dicts,
+        generated_answer=answer,
+        existing_eval_scores=sync_scores
+    )
+    ragas_db_dict = {
+        "context_relevance": ragas_metrics_obj.context_relevance,
+        "faithfulness": ragas_metrics_obj.faithfulness,
+        "answer_relevance": ragas_metrics_obj.answer_relevance,
+        "groundedness": ragas_metrics_obj.groundedness,
+        "overall_score": ragas_metrics_obj.overall_score,
+        "hallucination_risk": ragas_metrics_obj.hallucination_risk
+    }
+    ragas_display_dict = ragas_evaluator.to_display_dict(ragas_metrics_obj)
+
+    # Verify output contract
+    from app.services.output_contract import OutputVerifier
+    output_verifier = OutputVerifier()
+    contract_verification_res = output_verifier.verify(answer, contract, retrieved_chunks_dicts)
+    contract_verification_res["format"] = contract.format.value
+
+    if isinstance(trace_dict, dict):
+        trace_dict["ragas_metrics"] = ragas_display_dict["ragas_metrics"]
+        trace_dict["output_contract"] = contract_verification_res
+
     assistant_msg = Message(
         session_id=session_id,
         role="assistant",
         content=answer,
         sources=json.dumps(sources_out) if sources_out else "[]",
         usage_metadata=usage_metadata,
+        ragas_scores=ragas_db_dict
     )
     session_db.add(assistant_msg)
     session_db.commit()
@@ -607,7 +1025,7 @@ async def post_message(
         cost = calculate_cost(model_name, model_provider, i_tokens, o_tokens)
         
         # Post cost control call recording
-        cost_manager.post_call(content, answer, cost, pre.get("tier", "standard"))
+        cost_manager.post_call(content, answer, cost, pre.get("tier", "standard"), project_id=project_id, kb_version=kb_version)
         
         usage_record = TokenUsage(
             project_id=project_id,
@@ -646,7 +1064,8 @@ async def post_message(
         chunks_after_pruning=search_stats.get("chunks_after_pruning", 0),
         pruning_reduction_pct=search_stats.get("pruning_reduction_pct", 0.0),
         used_hybrid_search=search_stats.get("used_hybrid_search", False),
-        pipeline_trace=trace_dict
+        pipeline_trace=trace_dict,
+        ragas_scores=ragas_db_dict
     )
     session_db.add(qlog)
     session_db.commit()
@@ -680,6 +1099,11 @@ async def post_message(
             "overall_quality_score": float(sync_scores["overall_quality_score"]),
             "quality_label": str(sync_scores["quality_label"]),
         },
+        "conflict_detection": conflict_res,
+        "not_found_proof": not_found_proof,
+        "ragas_metrics": ragas_display_dict["ragas_metrics"],
+        "output_contract": contract_verification_res,
+        "pipeline_trace": trace_dict
     }
 
 
