@@ -550,6 +550,77 @@ async def post_message(
         "used_hybrid_search": getattr(search_results, "used_hybrid_search", False)
     }
 
+    # --- Upgrade 1: Self-Correcting Retrieval Loop ---
+    if gate_result and not gate_result.passed:
+        old_confidence = gate_result.max_confidence
+        enable_self_correction = getattr(rag_config, "enable_self_correction", True)
+        if enable_self_correction and 0.35 <= old_confidence < 0.65:
+            import logging
+            logger = logging.getLogger(__name__)
+            from app.services.self_correction_loop import SelfCorrectionPolicy
+            from app.services.pipeline_tracer import PipelineStage
+            
+            class CustomTracer:
+                def __init__(self, trace_d):
+                    self.trace_d = trace_d
+                def start_stage(self, stage):
+                    if "stages" not in self.trace_d:
+                        self.trace_d["stages"] = {}
+                    self.trace_d["stages"][stage.value] = {
+                        "stage": stage.value,
+                        "start_time": time.time(),
+                        "status": "running",
+                        "metadata": {}
+                    }
+                def end_stage(self, stage, status="success", metadata=None, error=None):
+                    if "stages" in self.trace_d and stage.value in self.trace_d["stages"]:
+                        stg = self.trace_d["stages"][stage.value]
+                        stg["end_time"] = time.time()
+                        stg["duration_ms"] = (stg["end_time"] - stg["start_time"]) * 1000.0
+                        stg["status"] = status
+                        if metadata:
+                            stg["metadata"].update(metadata)
+                        if error:
+                            stg["error_message"] = error
+            
+            c_tracer = CustomTracer(trace_dict)
+            policy = SelfCorrectionPolicy(session_db, llm, rag_engine._single_hybrid_search)
+            correction_res = await policy.execute_correction_loop(
+                query=content,
+                project_id=project_id,
+                rag_config=rag_config,
+                old_confidence=old_confidence,
+                history_dicts=history_dicts,
+                tracer=c_tracer
+            )
+            
+            if correction_res:
+                retry_chunks, retry_gate_result = correction_res
+                from app.rag.engine import SearchResultList
+                search_results = SearchResultList(retry_chunks)
+                gate_result = retry_gate_result
+                
+                ctx_chunks = [d.page_content for d, _ in search_results]
+                src_from_tools = []
+                for d, _ in search_results:
+                    meta = d.metadata or {}
+                    src_from_tools.append({
+                        "source": str(meta.get("source", "Unknown")),
+                        "doc_id": int(meta["doc_id"]) if meta.get("doc_id") is not None else 0
+                    })
+                    
+                search_stats = {
+                    "chunks_before_pruning": len(retry_chunks),
+                    "chunks_after_pruning": len(retry_chunks),
+                    "pruning_reduction_pct": 0.0,
+                    "used_hybrid_search": getattr(rag_config, "use_hybrid_search", True)
+                }
+                
+                # Override gate to proceed to generation
+                gate_result.passed = True
+            else:
+                logger.warning(f"Self-correction retry did not improve confidence for query '{content}'. Falling through to AbsenceProver.")
+
     not_found_proof = None
     if gate_result and not gate_result.passed:
         from app.services.absence_prover import AbsenceProver
@@ -999,9 +1070,24 @@ async def post_message(
     contract_verification_res = output_verifier.verify(answer, contract, retrieved_chunks_dicts)
     contract_verification_res["format"] = contract.format.value
 
+    # --- Upgrade 3: Claim-Level Citation Verification ---
+    from app.services.claim_verifier import ClaimVerifier
+    claim_verifier = ClaimVerifier()
+    claim_verification_res = claim_verifier.verify(answer, ctx_chunks)
+    claim_verification_dict = claim_verification_res.to_dict()
+    
+    # Attach unverified claims warning to the output contract
+    if claim_verification_res.has_unverified:
+        contract_verification_res["unverified_claims"] = claim_verification_res.unverified_claims
+        contract_verification_res["claim_verification_score"] = claim_verification_res.verification_score
+    else:
+        contract_verification_res["unverified_claims"] = []
+        contract_verification_res["claim_verification_score"] = claim_verification_res.verification_score
+
     if isinstance(trace_dict, dict):
         trace_dict["ragas_metrics"] = ragas_display_dict["ragas_metrics"]
         trace_dict["output_contract"] = contract_verification_res
+        trace_dict["claim_verification"] = claim_verification_dict
 
     assistant_msg = Message(
         session_id=session_id,
@@ -1103,6 +1189,7 @@ async def post_message(
         "not_found_proof": not_found_proof,
         "ragas_metrics": ragas_display_dict["ragas_metrics"],
         "output_contract": contract_verification_res,
+        "claim_verification": claim_verification_dict,
         "pipeline_trace": trace_dict
     }
 

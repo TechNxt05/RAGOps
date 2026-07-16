@@ -31,6 +31,7 @@ class ProjectRAGConfigPatch(BaseModel):
     answer_only_from_docs: Optional[bool] = None
     hallucination_guard: Optional[bool] = None
     max_tokens: Optional[int] = None
+    enable_self_correction: Optional[bool] = None
 
 
 @router.patch("/{project_id}/config", response_model=RAGConfig)

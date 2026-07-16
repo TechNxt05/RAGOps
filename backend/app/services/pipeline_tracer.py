@@ -13,6 +13,8 @@ class PipelineStage(str, Enum):
     RETRIEVAL = "retrieval"
     CONFIDENCE_GATE = "confidence_gate"
     LLM_GENERATION = "llm_generation"
+    SELF_CORRECTION_TRIGGERED = "self_correction_triggered"
+    CLAIM_VERIFICATION = "claim_verification"
 
 class StageTrace(BaseModel):
     stage: PipelineStage

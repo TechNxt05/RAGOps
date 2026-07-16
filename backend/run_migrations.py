@@ -38,6 +38,7 @@ def run_migration():
         ("project", "kb_version", "INTEGER DEFAULT 1"),
         ("project", "kb_version_updated_at", "TIMESTAMP"),
         ("ragconfig", "use_multi_query", "BOOLEAN DEFAULT TRUE"),
+        ("ragconfig", "enable_self_correction", "BOOLEAN DEFAULT TRUE"),
         ("querylog", "ragas_scores", "JSON"),
         ("message", "ragas_scores", "JSON"),
     ]
