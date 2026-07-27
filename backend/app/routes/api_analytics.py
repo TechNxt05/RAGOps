@@ -248,9 +248,48 @@ def get_project_analytics(
             for k, v in fallback_counter.items()
         ]
 
+    # 24-hour rolling SLA calculation (p95 latency with 2.0s = 2000ms warning threshold)
+    last_24h = datetime.utcnow() - timedelta(hours=24)
+    logs_24h = [l for l in logs if l.created_at >= last_24h and l.latency_ms is not None]
+    latencies_24h = sorted([float(l.latency_ms) for l in logs_24h])
+    if latencies_24h:
+        p95_idx = int(len(latencies_24h) * 0.95)
+        p95_latency_ms = latencies_24h[min(p95_idx, len(latencies_24h) - 1)]
+    else:
+        p95_latency_ms = 0.0
+
+    sla_warning = p95_latency_ms > 2000.0
+
+    # TTFT & TPOT averages
+    ttft_list = [float(l.ttft_ms) for l in logs if getattr(l, "ttft_ms", None) is not None]
+    tpot_list = [float(l.tpot_ms) for l in logs if getattr(l, "tpot_ms", None) is not None]
+    avg_ttft_ms = sum(ttft_list) / len(ttft_list) if ttft_list else 0.0
+    avg_tpot_ms = sum(tpot_list) / len(tpot_list) if tpot_list else 0.0
+
+    # Adaptive router backend breakdown
+    router_counter = Counter()
+    for l in logs:
+        backend = getattr(l, "adaptive_backend_used", None) or "hybrid"
+        router_counter[backend] += 1
+    
+    adaptive_router_breakdown = [
+        {"backend": k, "count": v, "pct": round(v / total * 100.0, 1)}
+        for k, v in router_counter.items()
+    ]
+
     return {
         "total_queries": total,
         "avg_latency_ms": round(avg_latency, 2),
+        "sla_metrics_24h": {
+            "p95_latency_ms": round(p95_latency_ms, 2),
+            "sla_warning_threshold_ms": 2000.0,
+            "sla_warning_triggered": sla_warning,
+        },
+        "latency_breakdown": {
+            "avg_ttft_ms": round(avg_ttft_ms, 2),
+            "avg_tpot_ms": round(avg_tpot_ms, 2),
+        },
+        "adaptive_router_breakdown": adaptive_router_breakdown,
         "avg_hallucination_score": round(avg_hall, 4),
         "avg_faithfulness_score": round(avg_faith, 4),
         "citation_engagement_rate": round(float(engagement), 4),

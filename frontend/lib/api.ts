@@ -185,9 +185,22 @@ export interface ProjectAnalytics {
   avg_ragas_faithfulness: number;
   avg_answer_relevance: number;
   avg_groundedness: number;
-  avg_overall_ragas: number;
   avg_compression_ratio: number;
   avg_cache_savings_usd: number;
+  sla_metrics_24h?: {
+    p95_latency_ms: number;
+    sla_warning_threshold_ms: number;
+    sla_warning_triggered: boolean;
+  };
+  latency_breakdown?: {
+    avg_ttft_ms: number;
+    avg_tpot_ms: number;
+  };
+  adaptive_router_breakdown?: {
+    backend: string;
+    count: number;
+    pct: number;
+  }[];
 }
 
 export interface CompareSide {

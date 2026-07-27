@@ -203,6 +203,52 @@ export default function ProjectAnalyticsPage() {
                 </CardContent>
               </Card>
 
+              {/* 24h Rolling SLA Monitor & Latency Breakdown (TTFT vs TPOT) */}
+              <Card className={`col-span-full md:col-span-2 border ${data?.sla_metrics_24h?.sla_warning_triggered ? 'border-amber-500/50 bg-amber-500/5' : 'border-emerald-500/30 bg-emerald-500/5'}`}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center justify-between">
+                    <span>24h Rolling SLA (p95 Latency)</span>
+                    {data?.sla_metrics_24h?.sla_warning_triggered ? (
+                      <Badge variant="destructive" className="text-[10px]">SLA Warning (&gt;2.0s)</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] border-emerald-500 text-emerald-400">SLA Normal (&lt;2.0s)</Badge>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="flex items-center justify-between pt-2">
+                  <div>
+                    <div className="text-2xl font-bold font-mono">{data?.sla_metrics_24h?.p95_latency_ms ?? 0} ms</div>
+                    <div className="text-xs text-muted-foreground mt-1">Target threshold: 2000 ms</div>
+                  </div>
+                  <div className="text-right border-l pl-4 font-mono text-xs">
+                    <div className="text-muted-foreground">TTFT (Prefill): <span className="font-bold text-sky-400">{data?.latency_breakdown?.avg_ttft_ms ?? 0} ms</span></div>
+                    <div className="text-muted-foreground mt-1">TPOT (Decode): <span className="font-bold text-purple-400">{data?.latency_breakdown?.avg_tpot_ms ?? 0} ms/token</span></div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Adaptive Router Backend Distribution Card */}
+              <Card className="col-span-full md:col-span-2 border border-purple-500/30 bg-purple-500/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-purple-400">Adaptive Router Backend Distribution (Paper 4)</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-2">
+                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                    {data?.adaptive_router_breakdown && data.adaptive_router_breakdown.length > 0 ? (
+                      data.adaptive_router_breakdown.map((b) => (
+                        <div key={b.backend} className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 rounded px-2.5 py-1">
+                          <span className="font-semibold capitalize text-slate-200">{b.backend}:</span>
+                          <span className="font-mono text-purple-400 font-bold">{b.pct}%</span>
+                          <span className="text-muted-foreground">({b.count})</span>
+                        </div>
+                      ))
+                    ) : (
+                      <span className="text-muted-foreground">No routing decision data collected yet.</span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Agentic RAG Performance Card */}
               {data?.agentic_metrics && data.agentic_metrics.total_agentic_queries > 0 && (
                 <Card className="border-indigo-200 bg-indigo-50/30 dark:border-indigo-900 dark:bg-indigo-950/20 col-span-full md:col-span-4 grid gap-4 grid-cols-1 md:grid-cols-3 p-4">

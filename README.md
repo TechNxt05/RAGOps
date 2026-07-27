@@ -18,11 +18,11 @@ All of these capabilities are coordinated by the main orchestrator, [RAGEngine](
 
 ---
 
-## 🌟 Advanced Production Upgrades (Phase 1, 2, & 3)
+## 🌟 Core System Subsystems
 
 RAGOps has been enhanced with production-grade components designed to optimize retrieval quality, control LLM spend, and supply granular pipeline diagnostics.
 
-### Phase 1: Query Intelligence Layer
+### Query Intelligence Layer
 * **Turn-Type Router**: Session-aware gating that classifies query intents into `CHIT_CHAT`, `RETRIEVAL`, or `FOLLOW_UP`. It bypasses the retrieval pipeline for chit-chat or fetches directly from cache for session follow-ups.
   * *Implementation*: [TurnTypeRouter](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/turn_type_router.py)
 * **Pre-Retrieval Query Rewriter**: History-aware query rewriter that leverages conversation history to expand search query candidates, solving pronoun reference dilution.
@@ -34,7 +34,7 @@ RAGOps has been enhanced with production-grade components designed to optimize r
 * **Session Context Cache**: Implements an active memory bank caching raw context chunks for follow-up questions, preventing redundant vector search retrievals.
   * *Implementation*: [SessionContextCache](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/session_context_cache.py)
 
-### Phase 2: Ingestion and Retrieval Core
+### Ingestion and Retrieval Core
 * **DeltaIndexer**: Hashes document chunk payloads during ingestion, computing differentials to add, update, or prune only modified chunks in FAISS indices.
   * *Implementation*: [DeltaIndexer](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/delta_indexer.py)
 * **DoclingParser**: Advanced layout-aware document parser targeting PDFs and Word files to extract tables, captions, headers, and semantic structures natively.
@@ -52,7 +52,7 @@ RAGOps has been enhanced with production-grade components designed to optimize r
 * **VersionedSemanticCache**: Semantic cache that maps questions to answers while respecting document versions and hashing signatures.
   * *Implementation*: [VersionedSemanticCache](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/versioned_cache.py)
 
-### Phase 3: Evaluation and Output Layer
+### Evaluation and Output Layer
 * **SemanticRouter**: Classifies queries into `FACTOID`, `ANALYTICAL`, `COMPARATIVE`, `PROCEDURAL`, or `DEFINITIONAL`, dynamically choosing search strategies (`FAST`, `STANDARD`, `DEEP`, `PARALLEL`) to override retrieval top_k, multi-query, and reranking parameters.
   * *Implementation*: [SemanticRouter](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/semantic_router.py)
 * **ContextualCompressor**: A query-aware sentence-level compressor that strips filler text while preserving key entities, currencies, codes, and numerical values verbatim.
@@ -70,9 +70,9 @@ RAGOps has been enhanced with production-grade components designed to optimize r
 
 ---
 
-## 🛡️ Production Reliability Upgrades (Phase 4)
+## 🛡️ Self-Healing & Verification Architecture
 
-Phase 4 introduces self-healing retrieval, automated pipeline benchmarking, and claim-level citation verification to close the final gaps between an advanced RAG system and a production-grade one.
+RAGOps introduces self-healing retrieval, automated pipeline benchmarking, and claim-level citation verification to close the final gaps between an advanced RAG system and a production-grade one.
 
 ### Upgrade 1: Self-Correcting Retrieval Loop
 When the Confidence Gate scores retrieval between 0.35 and 0.65 (the "gray zone"), rather than immediately refusing or blindly generating, the pipeline triggers a **self-correction cycle**:
@@ -98,6 +98,40 @@ A standalone evaluation harness that compares the 6 canonical RAG pipeline archi
 | **Corrective** | + Confidence gate + absence prover + self-correction |
 | **Agentic** | + Tool-calling agent with replanning |
 | **Full RAGOps** | All stages (cache, cost control, claim verification) |
+| **Adaptive RAGOps** | Full RAGOps + Adaptive Retrieval Router |
+
+---
+
+## ⚡ Adaptive Retrieval & Observability Architecture
+
+RAGOps incorporates an adaptive retrieval routing framework, interactive execution graph tracing, reasoning-effort model routing, and prefill/decode latency analytics.
+
+### 1. Adaptive Retrieval Router
+Instead of executing a heavy hybrid retrieval pipeline uniformly across all queries, the `AdaptiveRetrievalRouter` analyzes query feature scores to dispatch each query to the exact retrieval backend required:
+- **Exact/Keyword Lookup** (`INV-2024`, product codes, IDs) $\rightarrow$ **BM25 Search Only**
+- **Structured Aggregation** (counts, totals, averages, math) $\rightarrow$ **ComputationRouter**
+- **Relationship / Multi-hop** (cross-entity lineage) $\rightarrow$ **GraphRAG Path** (stubbed with explicit TODO)
+- **Semantic / Fuzzy** (broad natural language questions) $\rightarrow$ **FAISS + BM25 + RRF Hybrid**
+
+Every routed query logs a `RouterDecision` record: `{query, chosen_backend, confidence, feature_scores, fallback_triggered, reasoning}`.
+
+* *Implementation*: [AdaptiveRetrievalRouter](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/adaptive_retrieval_router.py)
+* *Config flag*: `RAGConfig.enable_adaptive_router` (default `true`)
+
+### 2. Interactive Execution Graph & Telemetry
+- **Visual Execution Pipeline**: Frontend interactive execution node map on `/executions`:
+  $$\text{Query} \rightarrow \text{TurnTypeRouter} \rightarrow \text{AdaptiveRetrievalRouter} \rightarrow \text{Retriever} \rightarrow \text{Reranker} \rightarrow \text{Compressor} \rightarrow \text{ConfidenceGate} \rightarrow \text{LLM} \rightarrow \text{ClaimVerifier} \rightarrow \text{Output}$$
+- **OpenTelemetry & Pipeline Tracing**: Root span and per-stage child spans instrumenting FastAPI and pipeline stages.
+- **2.0s p95 Rolling 24h SLA Monitor**: Real-time SLA warning calculation and analytics dashboard integration.
+
+### 3. AutoRAGBench 7-Variant Benchmark
+`backend/app/benchmark/variants.py` incorporates a 7th variant: `Adaptive RAGOps` (`enable_adaptive_router: true` vs `false` on `Full RAGOps`), enabling systematic performance comparison of adaptive routing vs. static hybrid retrieval.
+
+### 4. Reasoning-Effort Model Routing
+Extends the model router with a second axis: routing model selection by reasoning depth required (`LOW` for factoid lookups $\rightarrow$ fast model with small token budget; `HIGH` for analytical queries $\rightarrow$ high-effort model), reusing feature signals from the adaptive router.
+
+### 5. Prefill/Decode Latency Analytics (TTFT & TPOT)
+Splits overall latency metrics into **TTFT** (Time-To-First-Token, compute/prefill-bound) and **TPOT** (Time-Per-Output-Token, memory/decode-bound), surfacing both in project analytics.
 
 Each variant is evaluated on: **RAGAS triad** (context relevance, faithfulness, answer relevance), **groundedness**, **hallucination risk**, **latency**, **token cost**, and **cache hit rate**.
 

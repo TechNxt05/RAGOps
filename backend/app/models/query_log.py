@@ -17,6 +17,9 @@ class QueryLog(SQLModel, table=True):
     model_used: str
 
     latency_ms: Optional[float] = None
+    ttft_ms: Optional[float] = None  # Time-To-First-Token (ms)
+    tpot_ms: Optional[float] = None  # Time-Per-Output-Token (ms)
+    adaptive_backend_used: Optional[str] = None  # "bm25", "computation", "graph", "hybrid"
     chunks_retrieved: int = Field(default=0)
     tokens_used: int = Field(default=0)
 

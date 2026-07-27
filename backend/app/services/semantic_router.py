@@ -1,5 +1,7 @@
-from enum import Enum
-from typing import Optional
+class ReasoningEffort(Enum):
+    LOW = "low"         # Factoid / ID lookup -> fast model, low max_tokens
+    MEDIUM = "medium"   # Procedural / Definitional -> standard model
+    HIGH = "high"       # Analytical / Comparative / Multi-hop -> reasoning model, high max_tokens
 
 class QueryCategory(Enum):
     FACTOID = "factoid"           # Single fact lookup - fast path
@@ -88,7 +90,8 @@ class SemanticRouter:
     def classify(
         self, 
         query: str,
-        existing_intent: Optional[str] = None
+        existing_intent: Optional[str] = None,
+        adaptive_decision: Optional[Any] = None
     ) -> dict:
         """
         Classify query into category and select retrieval strategy.
@@ -126,16 +129,38 @@ class SemanticRouter:
         strategy = self.STRATEGY_MAP[category]
         config = self.STRATEGY_CONFIGS[strategy]
         
+        reasoning_effort = self._determine_reasoning_effort(category, adaptive_decision)
+
         return {
             "query_category": category.value,
             "retrieval_strategy": strategy.value,
+            "reasoning_effort": reasoning_effort.value,
+            "suggested_max_tokens": 512 if reasoning_effort == ReasoningEffort.LOW else (1024 if reasoning_effort == ReasoningEffort.MEDIUM else 2048),
+            "suggested_model_tier": "fast" if reasoning_effort == ReasoningEffort.LOW else ("standard" if reasoning_effort == ReasoningEffort.MEDIUM else "high_reasoning"),
             "top_k": config["top_k"],
             "use_multi_query": config["use_multi_query"],
             "rerank_top_n": config["rerank_top_n"],
             "description": config["description"],
             "category_scores": {k.value: v for k, v in scores.items()}
         }
-    
+
+    def _determine_reasoning_effort(
+        self,
+        category: QueryCategory,
+        adaptive_decision: Optional[Any] = None
+    ) -> ReasoningEffort:
+        if adaptive_decision and hasattr(adaptive_decision, "chosen_backend"):
+            if adaptive_decision.chosen_backend == "bm25":
+                return ReasoningEffort.LOW
+            elif adaptive_decision.chosen_backend in ("computation", "graph"):
+                return ReasoningEffort.HIGH
+
+        if category == QueryCategory.FACTOID:
+            return ReasoningEffort.LOW
+        elif category in (QueryCategory.ANALYTICAL, QueryCategory.COMPARATIVE):
+            return ReasoningEffort.HIGH
+        return ReasoningEffort.MEDIUM
+
     def get_retrieval_config(self, routing_result: dict) -> dict:
         """Extract retrieval config for use in MultiQueryRetriever."""
         return {

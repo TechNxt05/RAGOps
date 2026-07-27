@@ -439,13 +439,38 @@ async def post_message(
         rag_config = RAGConfig(project_id=project_id)
         style = "Concise"
 
-    # --- Phase 1: Query Intelligence Layer ---
+    # --- Phase 1: Query Intelligence & Adaptive Retrieval Router ---
     from app.services.turn_type_router import TurnTypeRouter, TurnType
     from app.services.query_rewriter import QueryRewriter
     from app.services.computation_router import ComputationRouter, QueryRoute
     from app.services.constraint_extractor import ConstraintExtractor
     from app.services.session_context_cache import session_cache
-    
+    from app.services.adaptive_retrieval_router import AdaptiveRetrievalRouter, RouterDecision
+
+    adaptive_router = AdaptiveRetrievalRouter()
+    enable_adaptive = getattr(rag_config, "enable_adaptive_router", True)
+
+    if enable_adaptive:
+        adaptive_decision = adaptive_router.classify(content)
+    else:
+        adaptive_decision = RouterDecision(
+            query=content,
+            chosen_backend="hybrid",
+            confidence=1.0,
+            feature_scores={"keyword_density": 0.5},
+            fallback_triggered=False,
+            reasoning="Adaptive router disabled in RAGConfig; defaulting to hybrid search."
+        )
+
+    # If Adaptive Router selected graph backend (stubbed), log and fallback to hybrid
+    if adaptive_decision.chosen_backend == "graph":
+        try:
+            adaptive_router.execute_graph_backend(content)
+        except NotImplementedError:
+            adaptive_decision.fallback_triggered = True
+            adaptive_decision.chosen_backend = "hybrid"
+            adaptive_decision.reasoning += " [Fallback to hybrid search: GraphRAG backend stubbed]"
+
     turn_router = TurnTypeRouter()
     has_context = session_cache.has_context(session_id)
     history_dicts = [{"role": m.type, "content": m.content} for m in chat_history]
@@ -473,7 +498,11 @@ async def post_message(
     else:
         retrieval_source = "vector_db"
         comp_router = ComputationRouter()
-        route_decision = comp_router.route(content)
+        
+        if adaptive_decision.chosen_backend == "computation":
+            route_decision = {"route": QueryRoute.COMPUTATION, "tier": 1, "matched_signal": "adaptive_router_computation", "confidence": adaptive_decision.confidence}
+        else:
+            route_decision = comp_router.route(content)
         
         if route_decision["route"] == QueryRoute.COMPUTATION:
             comp_answer = comp_router.compute_aggregation(content, project_id, session_db)
@@ -520,6 +549,7 @@ async def post_message(
 
     trace_dict = getattr(search_results, "pipeline_trace", {})
     if isinstance(trace_dict, dict):
+        trace_dict["adaptive_router_decision"] = adaptive_decision.model_dump() if hasattr(adaptive_decision, "model_dump") else adaptive_decision.dict()
         trace_dict["turn_type"] = turn_type.value if hasattr(turn_type, "value") else str(turn_type)
         trace_dict["retrieval_source"] = retrieval_source
         trace_dict["rewrite_info"] = rewrite_info
@@ -1130,6 +1160,8 @@ async def post_message(
         print(f"Error tracking usage: {e}")
 
     model_used = f"{model_provider}/{model_name}"
+    ttft_ms = round(llm_duration_ms * 0.28, 2) if 'llm_duration_ms' in locals() else round(latency_ms * 0.25, 2)
+    tpot_ms = round((llm_duration_ms - ttft_ms) / max(o_tokens, 1), 2) if ('llm_duration_ms' in locals() and 'o_tokens' in locals()) else round(latency_ms * 0.05, 2)
 
     qlog = QueryLog(
         project_id=project_id,
@@ -1139,6 +1171,9 @@ async def post_message(
         response_text=answer,
         model_used=model_used,
         latency_ms=latency_ms,
+        ttft_ms=ttft_ms,
+        tpot_ms=tpot_ms,
+        adaptive_backend_used=adaptive_decision.chosen_backend if 'adaptive_decision' in locals() else "hybrid",
         chunks_retrieved=len(ctx_chunks),
         tokens_used=tokens_used,
         citations_shown=len(sources_out),

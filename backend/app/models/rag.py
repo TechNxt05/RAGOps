@@ -53,6 +53,7 @@ class RAGConfig(SQLModel, table=True):
     semantic_weight: float = Field(default=0.6)  # 0.6 semantic, 0.4 BM25
     use_multi_query: bool = Field(default=True)
     enable_self_correction: bool = Field(default=True)
+    enable_adaptive_router: bool = Field(default=True)
 
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)

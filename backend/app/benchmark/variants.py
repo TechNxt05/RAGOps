@@ -17,6 +17,7 @@ class PipelineVariant(str, Enum):
     CORRECTIVE = "corrective"
     AGENTIC = "agentic"
     FULL_RAGOPS = "full_ragops"
+    ADAPTIVE = "adaptive"
 
 
 # ------------------------------------------------------------------
@@ -128,6 +129,25 @@ VARIANT_CONFIGS: Dict[PipelineVariant, Dict[str, Any]] = {
         "use_semantic_cache": True,
         "use_output_contract": True,
         "use_cost_control": True,
+        "enable_adaptive_router": False,
+    },
+    PipelineVariant.ADAPTIVE: {
+        "label": "Adaptive RAGOps (Paper 4)",
+        "description": "Full RAGOps pipeline enhanced with Adaptive Retrieval Router backend dispatching.",
+        "use_hybrid_search": True,
+        "use_reranker": True,
+        "use_query_rewriting": True,
+        "use_multi_query": True,
+        "use_contextual_compressor": True,
+        "use_conflict_detector": True,
+        "use_cross_reference": True,
+        "use_confidence_gate": True,
+        "use_self_correction": True,
+        "use_absence_prover": True,
+        "use_semantic_cache": True,
+        "use_output_contract": True,
+        "use_cost_control": True,
+        "enable_adaptive_router": True,
     },
 }
 

@@ -9,12 +9,17 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 
 class PipelineStage(str, Enum):
+    TURN_TYPE_ROUTER = "turn_type_router"
+    ADAPTIVE_ROUTER = "adaptive_router"
     QUERY_UNDERSTANDING = "query_understanding"
     RETRIEVAL = "retrieval"
+    RERANKER = "reranker"
+    COMPRESSOR = "compressor"
     CONFIDENCE_GATE = "confidence_gate"
     LLM_GENERATION = "llm_generation"
     SELF_CORRECTION_TRIGGERED = "self_correction_triggered"
     CLAIM_VERIFICATION = "claim_verification"
+    OUTPUT = "output"
 
 class StageTrace(BaseModel):
     stage: PipelineStage
