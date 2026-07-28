@@ -9,7 +9,7 @@
       "variant": "naive",
       "label": "Naive RAG",
       "avg_overall_score": 0.0,
-      "avg_latency_ms": 1928.4432232379913,
+      "avg_latency_ms": 2672.927498817444,
       "total_cost_usd": 0,
       "cache_hit_rate": 0.0,
       "error_rate": 1.0
@@ -19,7 +19,7 @@
       "variant": "advanced",
       "label": "Advanced RAG",
       "avg_overall_score": 0.0,
-      "avg_latency_ms": 1444.960594177246,
+      "avg_latency_ms": 2081.0062289237976,
       "total_cost_usd": 0,
       "cache_hit_rate": 0.0,
       "error_rate": 1.0
@@ -29,7 +29,7 @@
       "variant": "hybrid",
       "label": "Hybrid RAG",
       "avg_overall_score": 0.0,
-      "avg_latency_ms": 1264.2882168293,
+      "avg_latency_ms": 2280.415713787079,
       "total_cost_usd": 0,
       "cache_hit_rate": 0.0,
       "error_rate": 1.0
@@ -39,7 +39,7 @@
       "variant": "corrective",
       "label": "Corrective RAG",
       "avg_overall_score": 0.0,
-      "avg_latency_ms": 1276.4596343040466,
+      "avg_latency_ms": 1854.8544049263,
       "total_cost_usd": 0,
       "cache_hit_rate": 0.0,
       "error_rate": 1.0
@@ -49,7 +49,7 @@
       "variant": "agentic",
       "label": "Agentic RAG",
       "avg_overall_score": 0.0,
-      "avg_latency_ms": 1202.814280986786,
+      "avg_latency_ms": 2142.869472503662,
       "total_cost_usd": 0,
       "cache_hit_rate": 0.0,
       "error_rate": 1.0
@@ -59,7 +59,7 @@
       "variant": "full_ragops",
       "label": "Full RAGOps",
       "avg_overall_score": 0.0,
-      "avg_latency_ms": 1353.8373112678528,
+      "avg_latency_ms": 2127.9255151748657,
       "total_cost_usd": 0,
       "cache_hit_rate": 0.0,
       "error_rate": 1.0
@@ -67,9 +67,9 @@
     {
       "rank": 7,
       "variant": "adaptive",
-      "label": "Adaptive RAGOps (Paper 4)",
+      "label": "Adaptive RAGOps",
       "avg_overall_score": 0.0,
-      "avg_latency_ms": 1310.4093074798584,
+      "avg_latency_ms": 1839.1855955123901,
       "total_cost_usd": 0,
       "cache_hit_rate": 0.0,
       "error_rate": 1.0
@@ -81,7 +81,7 @@
       "label": "Naive RAG",
       "description": "Baseline semantic retrieval only (no reranker, no BM25, no query rewriting).",
       "total_queries": 8,
-      "avg_latency_ms": 1928.4432232379913,
+      "avg_latency_ms": 2672.927498817444,
       "avg_context_relevance": 0.0,
       "avg_faithfulness": 0.0,
       "avg_answer_relevance": 0.0,
@@ -95,7 +95,7 @@
           "query_id": "factoid_01",
           "variant": "naive",
           "answer": "",
-          "latency_ms": 3809.541940689087,
+          "latency_ms": 4762.336015701294,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -106,13 +106,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 8, 947356)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "factoid_02",
           "variant": "naive",
           "answer": "",
-          "latency_ms": 1984.8301410675049,
+          "latency_ms": 2778.5110473632812,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -123,13 +123,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 11, 891467)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "analytical_01",
           "variant": "naive",
           "answer": "",
-          "latency_ms": 1680.0806522369385,
+          "latency_ms": 2529.7513008117676,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -140,13 +140,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 14, 486854)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "comparative_01",
           "variant": "naive",
           "answer": "",
-          "latency_ms": 1311.4640712738037,
+          "latency_ms": 2313.131809234619,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -157,13 +157,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 16, 847413)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "procedural_01",
           "variant": "naive",
           "answer": "",
-          "latency_ms": 2262.120485305786,
+          "latency_ms": 2896.3589668273926,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -174,13 +174,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 19, 600684)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "absent_01",
           "variant": "naive",
           "answer": "",
-          "latency_ms": 1423.156976699829,
+          "latency_ms": 1585.6149196624756,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -191,13 +191,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 21, 607092)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "specific_01",
           "variant": "naive",
           "answer": "",
-          "latency_ms": 1349.658727645874,
+          "latency_ms": 1768.2974338531494,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -208,13 +208,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 23, 706860)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "follow_up_01",
           "variant": "naive",
           "answer": "",
-          "latency_ms": 1606.6927909851074,
+          "latency_ms": 2749.4184970855713,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -225,7 +225,7 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 25, 941600)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         }
       ]
     },
@@ -234,7 +234,7 @@
       "label": "Advanced RAG",
       "description": "Query rewriting + BGE reranker + adaptive chunking.",
       "total_queries": 8,
-      "avg_latency_ms": 1444.960594177246,
+      "avg_latency_ms": 2081.0062289237976,
       "avg_context_relevance": 0.0,
       "avg_faithfulness": 0.0,
       "avg_answer_relevance": 0.0,
@@ -248,7 +248,7 @@
           "query_id": "factoid_01",
           "variant": "advanced",
           "answer": "",
-          "latency_ms": 1599.75004196167,
+          "latency_ms": 1684.4041347503662,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -259,13 +259,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 27, 690142)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "factoid_02",
           "variant": "advanced",
           "answer": "",
-          "latency_ms": 1238.1727695465088,
+          "latency_ms": 2747.9617595672607,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -276,13 +276,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 29, 940941)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "analytical_01",
           "variant": "advanced",
           "answer": "",
-          "latency_ms": 1466.2244319915771,
+          "latency_ms": 2265.254259109497,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -293,13 +293,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 32, 560143)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "comparative_01",
           "variant": "advanced",
           "answer": "",
-          "latency_ms": 1626.9731521606445,
+          "latency_ms": 2807.859182357788,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -310,13 +310,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 35, 374592)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "procedural_01",
           "variant": "advanced",
           "answer": "",
-          "latency_ms": 1110.5310916900635,
+          "latency_ms": 2115.1480674743652,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -327,13 +327,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 37, 748736)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "absent_01",
           "variant": "advanced",
           "answer": "",
-          "latency_ms": 1371.0594177246094,
+          "latency_ms": 1405.9333801269531,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -344,13 +344,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 39, 203766)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "specific_01",
           "variant": "advanced",
           "answer": "",
-          "latency_ms": 2337.712287902832,
+          "latency_ms": 1886.7723941802979,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -361,13 +361,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 41, 252555)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "follow_up_01",
           "variant": "advanced",
           "answer": "",
-          "latency_ms": 809.2615604400635,
+          "latency_ms": 1734.7166538238525,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -378,7 +378,7 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 42, 592028)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         }
       ]
     },
@@ -387,7 +387,7 @@
       "label": "Hybrid RAG",
       "description": "BM25 + FAISS + RRF fusion with reranker.",
       "total_queries": 8,
-      "avg_latency_ms": 1264.2882168293,
+      "avg_latency_ms": 2280.415713787079,
       "avg_context_relevance": 0.0,
       "avg_faithfulness": 0.0,
       "avg_answer_relevance": 0.0,
@@ -401,7 +401,7 @@
           "query_id": "factoid_01",
           "variant": "hybrid",
           "answer": "",
-          "latency_ms": 797.0216274261475,
+          "latency_ms": 2793.4823036193848,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -412,13 +412,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 44, 860765)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "factoid_02",
           "variant": "hybrid",
           "answer": "",
-          "latency_ms": 1667.2043800354004,
+          "latency_ms": 2297.701358795166,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -429,13 +429,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 47, 605931)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "analytical_01",
           "variant": "hybrid",
           "answer": "",
-          "latency_ms": 1657.0320129394531,
+          "latency_ms": 2159.027099609375,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -446,13 +446,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 49, 874137)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "comparative_01",
           "variant": "hybrid",
           "answer": "",
-          "latency_ms": 921.0555553436279,
+          "latency_ms": 2632.589101791382,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -463,13 +463,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 52, 69234)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "procedural_01",
           "variant": "hybrid",
           "answer": "",
-          "latency_ms": 1202.3224830627441,
+          "latency_ms": 1934.9384307861328,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -480,13 +480,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 54, 119942)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "absent_01",
           "variant": "hybrid",
           "answer": "",
-          "latency_ms": 1507.7426433563232,
+          "latency_ms": 1924.3009090423584,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -497,13 +497,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 56, 670287)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "specific_01",
           "variant": "hybrid",
           "answer": "",
-          "latency_ms": 1116.001844406128,
+          "latency_ms": 2184.4403743743896,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -514,13 +514,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 37, 58, 107519)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "follow_up_01",
           "variant": "hybrid",
           "answer": "",
-          "latency_ms": 1245.9251880645752,
+          "latency_ms": 2316.8461322784424,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -531,7 +531,7 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 0, 789897)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         }
       ]
     },
@@ -540,7 +540,7 @@
       "label": "Corrective RAG",
       "description": "Hybrid + confidence gate + absence prover + self-correction loop.",
       "total_queries": 8,
-      "avg_latency_ms": 1276.4596343040466,
+      "avg_latency_ms": 1854.8544049263,
       "avg_context_relevance": 0.0,
       "avg_faithfulness": 0.0,
       "avg_answer_relevance": 0.0,
@@ -554,7 +554,7 @@
           "query_id": "factoid_01",
           "variant": "corrective",
           "answer": "",
-          "latency_ms": 1250.3619194030762,
+          "latency_ms": 1883.5763931274414,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -565,13 +565,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 2, 921076)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "factoid_02",
           "variant": "corrective",
           "answer": "",
-          "latency_ms": 1620.3460693359375,
+          "latency_ms": 1818.1343078613281,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -582,13 +582,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 5, 11640)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "analytical_01",
           "variant": "corrective",
           "answer": "",
-          "latency_ms": 1420.520544052124,
+          "latency_ms": 1240.6370639801025,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -599,13 +599,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 6, 252258)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "comparative_01",
           "variant": "corrective",
           "answer": "",
-          "latency_ms": 1247.7548122406006,
+          "latency_ms": 1958.1615924835205,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -616,13 +616,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 7, 722813)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "procedural_01",
           "variant": "corrective",
           "answer": "",
-          "latency_ms": 795.7799434661865,
+          "latency_ms": 1680.6964874267578,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -633,13 +633,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 9, 492494)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "absent_01",
           "variant": "corrective",
           "answer": "",
-          "latency_ms": 1442.509651184082,
+          "latency_ms": 2027.3587703704834,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -650,13 +650,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 11, 636029)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "specific_01",
           "variant": "corrective",
           "answer": "",
-          "latency_ms": 1635.21409034729,
+          "latency_ms": 2148.7224102020264,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -667,13 +667,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 13, 634327)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "follow_up_01",
           "variant": "corrective",
           "answer": "",
-          "latency_ms": 799.1900444030762,
+          "latency_ms": 2081.5482139587402,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -684,7 +684,7 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 15, 736820)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         }
       ]
     },
@@ -693,7 +693,7 @@
       "label": "Agentic RAG",
       "description": "LangGraph retrieval agent with tool-calling, replanning, and multi-step reasoning.",
       "total_queries": 8,
-      "avg_latency_ms": 1202.814280986786,
+      "avg_latency_ms": 2142.869472503662,
       "avg_context_relevance": 0.0,
       "avg_faithfulness": 0.0,
       "avg_answer_relevance": 0.0,
@@ -707,7 +707,7 @@
           "query_id": "factoid_01",
           "variant": "agentic",
           "answer": "",
-          "latency_ms": 1492.5687313079834,
+          "latency_ms": 2087.181329727173,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -718,13 +718,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 17, 708776)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "factoid_02",
           "variant": "agentic",
           "answer": "",
-          "latency_ms": 786.8120670318604,
+          "latency_ms": 2825.031280517578,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -735,13 +735,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 20, 592850)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "analytical_01",
           "variant": "agentic",
           "answer": "",
-          "latency_ms": 1266.7741775512695,
+          "latency_ms": 1856.8487167358398,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -752,13 +752,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 22, 677431)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "comparative_01",
           "variant": "agentic",
           "answer": "",
-          "latency_ms": 1627.8223991394043,
+          "latency_ms": 2423.6083030700684,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -769,13 +769,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 24, 229565)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "procedural_01",
           "variant": "agentic",
           "answer": "",
-          "latency_ms": 1118.54887008667,
+          "latency_ms": 1508.5573196411133,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -786,13 +786,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 26, 938521)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "absent_01",
           "variant": "agentic",
           "answer": "",
-          "latency_ms": 1409.1620445251465,
+          "latency_ms": 2274.5790481567383,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -803,13 +803,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 28, 341528)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "specific_01",
           "variant": "agentic",
           "answer": "",
-          "latency_ms": 1072.798490524292,
+          "latency_ms": 2316.702365875244,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -820,13 +820,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 30, 846469)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "follow_up_01",
           "variant": "agentic",
           "answer": "",
-          "latency_ms": 848.0274677276611,
+          "latency_ms": 1850.447416305542,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -837,7 +837,7 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 33, 155179)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         }
       ]
     },
@@ -846,7 +846,7 @@
       "label": "Full RAGOps",
       "description": "Complete production pipeline with all stages enabled (cache, cost control, claim verification).",
       "total_queries": 8,
-      "avg_latency_ms": 1353.8373112678528,
+      "avg_latency_ms": 2127.9255151748657,
       "avg_context_relevance": 0.0,
       "avg_faithfulness": 0.0,
       "avg_answer_relevance": 0.0,
@@ -860,7 +860,7 @@
           "query_id": "factoid_01",
           "variant": "full_ragops",
           "answer": "",
-          "latency_ms": 1118.8592910766602,
+          "latency_ms": 1787.9743576049805,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -871,13 +871,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 35, 104344)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "factoid_02",
           "variant": "full_ragops",
           "answer": "",
-          "latency_ms": 1027.0733833312988,
+          "latency_ms": 2085.0422382354736,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -888,13 +888,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 36, 791756)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "analytical_01",
           "variant": "full_ragops",
           "answer": "",
-          "latency_ms": 1678.8625717163086,
+          "latency_ms": 2305.548906326294,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -905,13 +905,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 38, 829283)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "comparative_01",
           "variant": "full_ragops",
           "answer": "",
-          "latency_ms": 1283.1628322601318,
+          "latency_ms": 2169.006109237671,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -922,13 +922,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 41, 183488)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "procedural_01",
           "variant": "full_ragops",
           "answer": "",
-          "latency_ms": 1355.2124500274658,
+          "latency_ms": 1686.7084503173828,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -939,13 +939,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 43, 352640)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "absent_01",
           "variant": "full_ragops",
           "answer": "",
-          "latency_ms": 2010.7803344726562,
+          "latency_ms": 2635.4024410247803,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -956,13 +956,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 45, 26021)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "specific_01",
           "variant": "full_ragops",
           "answer": "",
-          "latency_ms": 1241.3642406463623,
+          "latency_ms": 1592.99898147583,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -973,13 +973,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 47, 404778)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "follow_up_01",
           "variant": "full_ragops",
           "answer": "",
-          "latency_ms": 1115.3833866119385,
+          "latency_ms": 2760.7226371765137,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -990,16 +990,16 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 49, 805522)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         }
       ]
     },
     {
       "variant": "adaptive",
-      "label": "Adaptive RAGOps (Paper 4)",
+      "label": "Adaptive RAGOps",
       "description": "Full RAGOps pipeline enhanced with Adaptive Retrieval Router backend dispatching.",
       "total_queries": 8,
-      "avg_latency_ms": 1310.4093074798584,
+      "avg_latency_ms": 1839.1855955123901,
       "avg_context_relevance": 0.0,
       "avg_faithfulness": 0.0,
       "avg_answer_relevance": 0.0,
@@ -1013,7 +1013,7 @@
           "query_id": "factoid_01",
           "variant": "adaptive",
           "answer": "",
-          "latency_ms": 1233.0024242401123,
+          "latency_ms": 1774.3525505065918,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -1024,13 +1024,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 51, 726749)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "factoid_02",
           "variant": "adaptive",
           "answer": "",
-          "latency_ms": 1662.736177444458,
+          "latency_ms": 1646.907091140747,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -1041,13 +1041,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 53, 819508)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "analytical_01",
           "variant": "adaptive",
           "answer": "",
-          "latency_ms": 1018.9487934112549,
+          "latency_ms": 1364.861011505127,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -1058,13 +1058,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 54, 931274)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "comparative_01",
           "variant": "adaptive",
           "answer": "",
-          "latency_ms": 1094.3067073822021,
+          "latency_ms": 2078.174829483032,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -1075,13 +1075,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 56, 872404)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "procedural_01",
           "variant": "adaptive",
           "answer": "",
-          "latency_ms": 1909.5885753631592,
+          "latency_ms": 2001.622200012207,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -1092,13 +1092,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 38, 58, 737700)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "absent_01",
           "variant": "adaptive",
           "answer": "",
-          "latency_ms": 1283.7169170379639,
+          "latency_ms": 2191.0367012023926,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -1109,13 +1109,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 39, 0, 860953)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "specific_01",
           "variant": "adaptive",
           "answer": "",
-          "latency_ms": 1029.3667316436768,
+          "latency_ms": 2352.7846336364746,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -1126,13 +1126,13 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 39, 3, 219109)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         },
         {
           "query_id": "follow_up_01",
           "variant": "adaptive",
           "answer": "",
-          "latency_ms": 1251.60813331604,
+          "latency_ms": 1303.7457466125488,
           "token_cost_estimate": 0.0,
           "cache_hit": false,
           "chunks_retrieved": 0,
@@ -1143,7 +1143,7 @@
           "ragas_overall": 0.0,
           "hallucination_risk": "unknown",
           "confidence_score": 0.0,
-          "error": "Client.__init__() got an unexpected keyword argument 'proxies'"
+          "error": "(psycopg2.errors.ForeignKeyViolation) insert or update on table \"ragconfig\" violates foreign key constraint \"ragconfig_project_id_fkey\"\nDETAIL:  Key (project_id)=(1) is not present in table \"project\".\n\n[SQL: INSERT INTO ragconfig (project_id, primary_llm_provider, primary_llm_name, fallback_llm_provider, fallback_llm_name, embedding_model, chunk_size, chunk_overlap, temperature, top_p, max_output_tokens, response_style, top_k, similarity_threshold, max_context_tokens, context_ordering, answer_only_from_docs, hallucination_guard, max_tokens, stop_sequences, sensitive_topic_guard, use_hybrid_search, semantic_weight, use_multi_query, enable_self_correction, enable_adaptive_router, is_active, created_at) VALUES (%(project_id)s, %(primary_llm_provider)s, %(primary_llm_name)s, %(fallback_llm_provider)s, %(fallback_llm_name)s, %(embedding_model)s, %(chunk_size)s, %(chunk_overlap)s, %(temperature)s, %(top_p)s, %(max_output_tokens)s, %(response_style)s, %(top_k)s, %(similarity_threshold)s, %(max_context_tokens)s, %(context_ordering)s, %(answer_only_from_docs)s, %(hallucination_guard)s, %(max_tokens)s, %(stop_sequences)s, %(sensitive_topic_guard)s, %(use_hybrid_search)s, %(semantic_weight)s, %(use_multi_query)s, %(enable_self_correction)s, %(enable_adaptive_router)s, %(is_active)s, %(created_at)s) RETURNING ragconfig.id]\n[parameters: {'project_id': 1, 'primary_llm_provider': 'groq', 'primary_llm_name': 'llama-3.3-70b-versatile', 'fallback_llm_provider': 'google', 'fallback_llm_name': 'gemini-1.5-flash', 'embedding_model': 'google-embedding-001', 'chunk_size': 1000, 'chunk_overlap': 200, 'temperature': 0.7, 'top_p': 0.9, 'max_output_tokens': 1024, 'response_style': 'Concise', 'top_k': 4, 'similarity_threshold': 0.0, 'max_context_tokens': 2048, 'context_ordering': 'similarity', 'answer_only_from_docs': False, 'hallucination_guard': False, 'max_tokens': 2000, 'stop_sequences': '[]', 'sensitive_topic_guard': '[]', 'use_hybrid_search': True, 'semantic_weight': 0.6, 'use_multi_query': True, 'enable_self_correction': True, 'enable_adaptive_router': True, 'is_active': True, 'created_at': datetime.datetime(2026, 7, 28, 10, 39, 4, 901766)}]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
         }
       ]
     }

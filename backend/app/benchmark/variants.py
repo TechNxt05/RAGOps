@@ -132,7 +132,7 @@ VARIANT_CONFIGS: Dict[PipelineVariant, Dict[str, Any]] = {
         "enable_adaptive_router": False,
     },
     PipelineVariant.ADAPTIVE: {
-        "label": "Adaptive RAGOps (Paper 4)",
+        "label": "Adaptive RAGOps",
         "description": "Full RAGOps pipeline enhanced with Adaptive Retrieval Router backend dispatching.",
         "use_hybrid_search": True,
         "use_reranker": True,

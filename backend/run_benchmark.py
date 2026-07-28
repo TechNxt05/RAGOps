@@ -86,6 +86,22 @@ async def main():
     session_gen = get_session()
     session_db = next(session_gen)
 
+    # Ensure Project and RAGConfig exist in DB
+    from sqlmodel import select
+    from app.models.rag import Project, RAGConfig
+    project = session_db.get(Project, args.project_id)
+    if not project:
+        project = Project(id=args.project_id, name=f"Benchmark Project {args.project_id}", description="Auto-created benchmark project")
+        session_db.add(project)
+        session_db.commit()
+        session_db.refresh(project)
+
+    rag_config = session_db.exec(select(RAGConfig).where(RAGConfig.project_id == args.project_id).where(RAGConfig.is_active == True)).first()
+    if not rag_config:
+        rag_config = RAGConfig(project_id=args.project_id, is_active=True)
+        session_db.add(rag_config)
+        session_db.commit()
+
     # Create a synthetic admin user for benchmark (read-only operations)
     class BenchmarkUser:
         id = 1

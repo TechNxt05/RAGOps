@@ -169,7 +169,10 @@ class BenchmarkRunner:
             try:
                 rag_config = engine.get_active_config(self.project_id)
             except ValueError:
-                rag_config = RAGConfig(project_id=self.project_id)
+                rag_config = RAGConfig(project_id=self.project_id, is_active=True)
+                self.session_db.add(rag_config)
+                self.session_db.commit()
+                self.session_db.refresh(rag_config)
 
             # Override toggles
             rag_config.use_hybrid_search = variant_config.get("use_hybrid_search", True)
