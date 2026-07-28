@@ -171,9 +171,17 @@ class BenchmarkRunner:
             except ValueError:
                 rag_config = RAGConfig(project_id=self.project_id)
 
-            # Override hybrid search toggle
+            # Override toggles
             rag_config.use_hybrid_search = variant_config.get("use_hybrid_search", True)
             rag_config.enable_self_correction = variant_config.get("use_self_correction", True)
+            rag_config.enable_adaptive_router = variant_config.get("enable_adaptive_router", False)
+
+            if rag_config.enable_adaptive_router:
+                from app.services.adaptive_retrieval_router import AdaptiveRetrievalRouter
+                adaptive_router = AdaptiveRetrievalRouter()
+                decision = adaptive_router.classify(query.query)
+                if decision.chosen_backend == "bm25":
+                    rag_config.use_hybrid_search = False
 
             # Build LLM client
             import os as _os
@@ -260,6 +268,10 @@ class BenchmarkRunner:
 
         except Exception as exc:
             result.error = str(exc)
+            try:
+                self.session_db.rollback()
+            except Exception:
+                pass
             logger.error(f"Benchmark error [{variant.value}][{query.id}]: {exc}")
 
         result.latency_ms = (time.time() - t0) * 1000.0

@@ -33,10 +33,19 @@ async def main():
     parser.add_argument("--verbose", action="store_true", help="Show per-query detail")
     args = parser.parse_args()
 
-    from app.db import get_session
+    if sys.platform == "win32":
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except Exception:
+            pass
+
+    from app.db import get_session, init_db
     from app.benchmark.variants import PipelineVariant
     from app.benchmark.runner import BenchmarkRunner
     from app.benchmark.report import render_ascii_table, render_per_query_detail, save_report
+
+    # Initialize DB columns
+    init_db()
 
     # Parse variant filter
     variant_filter = None

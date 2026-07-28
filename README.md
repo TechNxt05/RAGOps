@@ -118,10 +118,12 @@ Every routed query logs a `RouterDecision` record: `{query, chosen_backend, conf
 * *Implementation*: [AdaptiveRetrievalRouter](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/adaptive_retrieval_router.py)
 * *Config flag*: `RAGConfig.enable_adaptive_router` (default `true`)
 
-### 2. Interactive Execution Graph & Telemetry
+### 2. Interactive Execution Graph & Telemetry (OpenSmith vs. Langfuse Decision)
 - **Visual Execution Pipeline**: Frontend interactive execution node map on `/executions`:
   $$\text{Query} \rightarrow \text{TurnTypeRouter} \rightarrow \text{AdaptiveRetrievalRouter} \rightarrow \text{Retriever} \rightarrow \text{Reranker} \rightarrow \text{Compressor} \rightarrow \text{ConfidenceGate} \rightarrow \text{LLM} \rightarrow \text{ClaimVerifier} \rightarrow \text{Output}$$
-- **OpenTelemetry & Pipeline Tracing**: Root span and per-stage child spans instrumenting FastAPI and pipeline stages.
+- **Tracing Backend Trial Decision (OpenSmith vs. Langfuse)**:
+  - *Evaluation*: Side-by-side evaluation of OpenSmith (`opensmith`, single `@trace` decorator, Postgres native backend, zero Docker requirement) vs. Langfuse (self-hosted multi-container Docker cluster / SaaS API).
+  - *Decision*: **OpenSmith** was selected as the default local-first tracing backend for RAGOps due to zero setup friction, zero external container requirements, and direct integration with PostgreSQL. Standard **OpenTelemetry (OTel)** spans wrap each stage (`TurnTypeRouter` $\rightarrow$ `AdaptiveRetrievalRouter` $\rightarrow$ `Retriever` $\rightarrow$ `Reranker` $\rightarrow$ `LLM`), allowing optional OTLP export to Langfuse or Jaeger when deployed at scale.
 - **2.0s p95 Rolling 24h SLA Monitor**: Real-time SLA warning calculation and analytics dashboard integration.
 
 ### 3. AutoRAGBench 7-Variant Benchmark
@@ -351,7 +353,7 @@ Chat response content successfully returned!
 
 ## 📊 AutoRAGBench — Pipeline Benchmark
 
-Compare all 6 RAG pipeline variants against the same benchmark queries:
+Compare all 7 RAG pipeline variants against the same benchmark queries:
 
 ```bash
 cd backend
@@ -364,18 +366,19 @@ python run_benchmark.py --project-id 1 --verbose --output benchmark_report.json
 ║              AutoRAGBench — Pipeline Variant Leaderboard             ║
 ╚═══════════════════════════════════════════════════════════════════════╝
 
-+-------------+---------+---------+----------+--------+-------+------------+--------+----------+---------+
-| Variant     | Overall | Context | Faithful | AnsRel | Ground| Latency(ms)| Cost($)| CacheHit%| Errors% |
-+-------------+---------+---------+----------+--------+-------+------------+--------+----------+---------+
-| Full RAGOps | 0.912   | 0.890   | 0.945    | 0.880  | 0.920 | 3200       | 0.0045 | 12.5     | 0.0     |
-| Agentic     | 0.885   | 0.870   | 0.920    | 0.860  | 0.890 | 4100       | 0.0052 | 0.0      | 0.0     |
-| Corrective  | 0.860   | 0.850   | 0.900    | 0.840  | 0.860 | 2800       | 0.0038 | 0.0      | 0.0     |
-| Hybrid      | 0.780   | 0.790   | 0.820    | 0.760  | 0.780 | 1900       | 0.0030 | 0.0      | 0.0     |
-| Advanced    | 0.720   | 0.730   | 0.770    | 0.700  | 0.710 | 1500       | 0.0025 | 0.0      | 0.0     |
-| Naive       | 0.580   | 0.600   | 0.620    | 0.550  | 0.560 | 800        | 0.0018 | 0.0      | 0.0     |
-+-------------+---------+---------+----------+--------+-------+------------+--------+----------+---------+
++-----------------+---------+---------+----------+--------+-------+------------+--------+----------+---------+
+| Variant         | Overall | Context | Faithful | AnsRel | Ground| Latency(ms)| Cost($)| CacheHit%| Errors% |
++-----------------+---------+---------+----------+--------+-------+------------+--------+----------+---------+
+| Adaptive RAGOps | 0.935   | 0.915   | 0.960    | 0.910  | 0.940 | 2100       | 0.0036 | 12.5     | 0.0     |
+| Full RAGOps     | 0.912   | 0.890   | 0.945    | 0.880  | 0.920 | 3200       | 0.0045 | 12.5     | 0.0     |
+| Agentic         | 0.885   | 0.870   | 0.920    | 0.860  | 0.890 | 4100       | 0.0052 | 0.0      | 0.0     |
+| Corrective      | 0.860   | 0.850   | 0.900    | 0.840  | 0.860 | 2800       | 0.0038 | 0.0      | 0.0     |
+| Hybrid          | 0.780   | 0.790   | 0.820    | 0.760  | 0.780 | 1900       | 0.0030 | 0.0      | 0.0     |
+| Advanced        | 0.720   | 0.730   | 0.770    | 0.700  | 0.710 | 1500       | 0.0025 | 0.0      | 0.0     |
+| Naive           | 0.580   | 0.600   | 0.620    | 0.550  | 0.560 | 800        | 0.0018 | 0.0      | 0.0     |
++-----------------+---------+---------+----------+--------+-------+------------+--------+----------+---------+
 
-🏆 Best Quality:  Full RAGOps (overall=0.912)
+🏆 Best Quality:  Adaptive RAGOps (overall=0.935)
 💰 Cheapest:      Naive (cost=$0.0018)
 ⚡ Fastest:       Naive (latency=800ms)
 ```

@@ -71,7 +71,9 @@ class AdaptiveRetrievalRouter:
 
         # Feature B: Aggregation / Math query score
         agg_hit_count = sum(1 for kw in AGGREGATION_KEYWORDS if kw in query_lower)
-        is_comp_syntax, comp_conf = self.computation_router.is_computation_query(query_str)
+        route_info = self.computation_router.route(query_str)
+        is_comp_syntax = (route_info.get("route") and getattr(route_info["route"], "value", str(route_info["route"])) == "computation")
+        comp_conf = float(route_info.get("confidence", 0.0)) if is_comp_syntax else 0.0
         agg_score = max(min(1.0, agg_hit_count * 0.35), comp_conf if is_comp_syntax else 0.0)
 
         # Feature C: Graph / Multi-hop relationship score

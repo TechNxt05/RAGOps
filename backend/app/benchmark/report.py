@@ -59,9 +59,9 @@ def render_ascii_table(summaries: List[VariantSummary]) -> str:
 
     lines = [
         "",
-        "╔═══════════════════════════════════════════════════════════════════════╗",
-        "║              AutoRAGBench — Pipeline Variant Leaderboard             ║",
-        "╚═══════════════════════════════════════════════════════════════════════╝",
+        "+-----------------------------------------------------------------------+",
+        "|              AutoRAGBench -- Pipeline Variant Leaderboard             |",
+        "+-----------------------------------------------------------------------+",
         "",
         sep,
         header_line,
@@ -78,9 +78,9 @@ def render_ascii_table(summaries: List[VariantSummary]) -> str:
         best = max(summaries, key=lambda s: s.avg_overall_score)
         cheapest = min(summaries, key=lambda s: s.total_token_cost)
         fastest = min(summaries, key=lambda s: s.avg_latency_ms)
-        lines.append(f"🏆 Best Quality:  {best.label} (overall={_fmt(best.avg_overall_score)})")
-        lines.append(f"💰 Cheapest:      {cheapest.label} (cost=${_fmt(cheapest.total_token_cost, 4)})")
-        lines.append(f"⚡ Fastest:       {fastest.label} (latency={_fmt(fastest.avg_latency_ms, 0)}ms)")
+        lines.append(f"[Best Quality]:  {best.label} (overall={_fmt(best.avg_overall_score)})")
+        lines.append(f"[Cheapest]:      {cheapest.label} (cost=${_fmt(cheapest.total_token_cost, 4)})")
+        lines.append(f"[Fastest]:       {fastest.label} (latency={_fmt(fastest.avg_latency_ms, 0)}ms)")
         lines.append("")
 
     return "\n".join(lines)

@@ -27,3 +27,13 @@ def get_session():
 
 def init_db():
     SQLModel.metadata.create_all(engine)
+    # Ensure newly added columns exist in PostgreSQL without requiring manual Alembic migrations
+    with engine.begin() as conn:
+        from sqlalchemy import text
+        try:
+            conn.execute(text("ALTER TABLE ragconfig ADD COLUMN IF NOT EXISTS enable_adaptive_router BOOLEAN DEFAULT TRUE;"))
+            conn.execute(text("ALTER TABLE querylog ADD COLUMN IF NOT EXISTS ttft_ms FLOAT;"))
+            conn.execute(text("ALTER TABLE querylog ADD COLUMN IF NOT EXISTS tpot_ms FLOAT;"))
+            conn.execute(text("ALTER TABLE querylog ADD COLUMN IF NOT EXISTS adaptive_backend_used VARCHAR(64);"))
+        except Exception as e:
+            print(f"Migration note: {e}")
