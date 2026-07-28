@@ -4,6 +4,28 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+try:
+    import httpx
+    _orig_client_init = httpx.Client.__init__
+    def _patched_client_init(self, *args, **kwargs):
+        if "proxies" in kwargs:
+            p = kwargs.pop("proxies")
+            if p and "proxy" not in kwargs:
+                kwargs["proxy"] = p
+        return _orig_client_init(self, *args, **kwargs)
+    httpx.Client.__init__ = _patched_client_init
+
+    _orig_async_client_init = httpx.AsyncClient.__init__
+    def _patched_async_client_init(self, *args, **kwargs):
+        if "proxies" in kwargs:
+            p = kwargs.pop("proxies")
+            if p and "proxy" not in kwargs:
+                kwargs["proxy"] = p
+        return _orig_async_client_init(self, *args, **kwargs)
+    httpx.AsyncClient.__init__ = _patched_async_client_init
+except Exception:
+    pass
+
 app = FastAPI(title="RAGOps API", version="1.0.0")
 
 # CORS Setup

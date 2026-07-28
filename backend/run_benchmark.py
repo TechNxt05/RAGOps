@@ -21,6 +21,29 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from dotenv import load_dotenv
 load_dotenv()
 
+# Patch httpx 0.28+ breaking change (proxies argument removed in favor of proxy)
+try:
+    import httpx
+    _orig_client_init = httpx.Client.__init__
+    def _patched_client_init(self, *args, **kwargs):
+        if "proxies" in kwargs:
+            p = kwargs.pop("proxies")
+            if p and "proxy" not in kwargs:
+                kwargs["proxy"] = p
+        return _orig_client_init(self, *args, **kwargs)
+    httpx.Client.__init__ = _patched_client_init
+
+    _orig_async_client_init = httpx.AsyncClient.__init__
+    def _patched_async_client_init(self, *args, **kwargs):
+        if "proxies" in kwargs:
+            p = kwargs.pop("proxies")
+            if p and "proxy" not in kwargs:
+                kwargs["proxy"] = p
+        return _orig_async_client_init(self, *args, **kwargs)
+    httpx.AsyncClient.__init__ = _patched_async_client_init
+except Exception:
+    pass
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("AutoRAGBench")
 
