@@ -88,7 +88,7 @@ async def main():
 
     # Ensure Project and RAGConfig exist in DB
     from sqlmodel import select
-    from app.models.rag import Project, RAGConfig
+    from app.models.rag import Project, RAGConfig, Document, Chunk
     project = session_db.get(Project, args.project_id)
     if not project:
         project = Project(id=args.project_id, name=f"Benchmark Project {args.project_id}", description="Auto-created benchmark project")
@@ -125,10 +125,9 @@ async def main():
 
         # Seed BM25 index
         from app.services.bm25_service import bm25_manager
-        bm25_manager.add_document_chunks(
-            project_id=args.project_id,
-            chunks=[c1.content, c2.content, c3.content, c4.content, c5.content],
-            doc_ids=[doc.id] * 5
+        bm25_manager.build_index(
+            str(args.project_id),
+            [c1.content, c2.content, c3.content, c4.content, c5.content]
         )
 
     # Create a synthetic admin user for benchmark (read-only operations)

@@ -108,6 +108,13 @@ A standalone evaluation harness that compares the 6 canonical RAG pipeline archi
 
 RAGOps incorporates an adaptive retrieval routing framework, interactive execution graph tracing, reasoning-effort model routing, and prefill/decode latency analytics.
 
+### 0. Policy-Driven Adaptive AI Runtime (Paper #4 Foundation)
+RAGOps includes a centralized orchestration layer ([backend/app/runtime/](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/runtime/)) that dynamically allocates computation per request:
+- **`RuntimeState`**: Typed Pydantic v2 lifecycle state tracking query complexity, entity density, feature flags, budget constraints, and trace events.
+- **`ExecutionPlan`**: Pre-execution blueprint resolved before pipeline execution, specifying `retrieval_strategy`, `retrieval_top_k`, `reranking`, `graph_expansion`, `model`, `reasoning_effort`, and `verification_level`.
+- **`PolicyEngine` & `ConstraintEngine`**: Enforces latency (`latency_budget_ms`), cost (`cost_budget`), and retry boundaries (`max_retries`), gracefully degrading retrieval depth or skipping reranking under tight budgets.
+- **Adaptive Reranking & Quality-Aware Early Exits**: Skips expensive cross-encoder reranking on HIGH retrieval confidence (`>=0.85`), saving cost and latency.
+
 ### 1. Adaptive Retrieval Router
 Instead of executing a heavy hybrid retrieval pipeline uniformly across all queries, the `AdaptiveRetrievalRouter` analyzes query feature scores to dispatch each query to the exact retrieval backend required:
 - **Exact/Keyword Lookup** (`INV-2024`, product codes, IDs) $\rightarrow$ **BM25 Search Only**
@@ -122,14 +129,14 @@ Every routed query logs a `RouterDecision` record: `{query, chosen_backend, conf
 
 ### 2. Interactive Execution Graph & Telemetry (OpenSmith vs. Langfuse Decision)
 - **Visual Execution Pipeline**: Frontend interactive execution node map on `/executions`:
-  $$\text{Query} \rightarrow \text{TurnTypeRouter} \rightarrow \text{AdaptiveRetrievalRouter} \rightarrow \text{Retriever} \rightarrow \text{Reranker} \rightarrow \text{Compressor} \rightarrow \text{ConfidenceGate} \rightarrow \text{LLM} \rightarrow \text{ClaimVerifier} \rightarrow \text{Output}$$
+  $$\text{Query} \rightarrow \text{RuntimePlanner} \rightarrow \text{AdaptiveRetrievalRouter} \rightarrow \text{Retriever} \rightarrow \text{Reranker} \rightarrow \text{Compressor} \rightarrow \text{ConfidenceGate} \rightarrow \text{LLM} \rightarrow \text{ClaimVerifier} \rightarrow \text{Output}$$
 - **Tracing Backend Trial Decision (OpenSmith vs. Langfuse)**:
   - *Evaluation*: Side-by-side evaluation of OpenSmith (`opensmith`, single `@trace` decorator, Postgres native backend, zero Docker requirement) vs. Langfuse (self-hosted multi-container Docker cluster / SaaS API).
   - *Decision*: **OpenSmith** was selected as the default local-first tracing backend for RAGOps due to zero setup friction, zero external container requirements, and direct integration with PostgreSQL. Standard **OpenTelemetry (OTel)** spans wrap each stage (`TurnTypeRouter` $\rightarrow$ `AdaptiveRetrievalRouter` $\rightarrow$ `Retriever` $\rightarrow$ `Reranker` $\rightarrow$ `LLM`), allowing optional OTLP export to Langfuse or Jaeger when deployed at scale.
 - **2.0s p95 Rolling 24h SLA Monitor**: Real-time SLA warning calculation and analytics dashboard integration.
 
-### 3. AutoRAGBench 7-Variant Benchmark
-`backend/app/benchmark/variants.py` incorporates a 7th variant: `Adaptive RAGOps` (`enable_adaptive_router: true` vs `false` on `Full RAGOps`), enabling systematic performance comparison of adaptive routing vs. static hybrid retrieval.
+### 3. AutoRAGBench 8-Variant Benchmark
+`backend/app/benchmark/variants.py` incorporates an 8th variant: `Policy-Driven RAGOps` (`enable_runtime_planner: true`), enabling systematic performance comparison of policy-driven adaptive execution vs. static hybrid retrieval.
 
 ### 4. Reasoning-Effort Model Routing
 Extends the model router with a second axis: routing model selection by reasoning depth required (`LOW` for factoid lookups $\rightarrow$ fast model with small token budget; `HIGH` for analytical queries $\rightarrow$ high-effort model), reusing feature signals from the adaptive router.

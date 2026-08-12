@@ -179,7 +179,14 @@ class BenchmarkRunner:
             rag_config.enable_self_correction = variant_config.get("use_self_correction", True)
             rag_config.enable_adaptive_router = variant_config.get("enable_adaptive_router", False)
 
-            if rag_config.enable_adaptive_router:
+            if variant_config.get("enable_runtime_planner", False):
+                from app.runtime.planner import RuntimePlanner
+                planner = RuntimePlanner()
+                st, plan = planner.plan(query.query, project_id=self.project_id)
+                rag_config.top_k = plan.retrieval_top_k
+                if plan.retrieval_strategy == "bm25":
+                    rag_config.use_hybrid_search = False
+            elif rag_config.enable_adaptive_router:
                 from app.services.adaptive_retrieval_router import AdaptiveRetrievalRouter
                 adaptive_router = AdaptiveRetrievalRouter()
                 decision = adaptive_router.classify(query.query)

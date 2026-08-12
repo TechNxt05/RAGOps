@@ -18,6 +18,7 @@ class PipelineVariant(str, Enum):
     AGENTIC = "agentic"
     FULL_RAGOPS = "full_ragops"
     ADAPTIVE = "adaptive"
+    POLICY_DRIVEN = "policy_driven"
 
 
 # ------------------------------------------------------------------
@@ -148,6 +149,26 @@ VARIANT_CONFIGS: Dict[PipelineVariant, Dict[str, Any]] = {
         "use_output_contract": True,
         "use_cost_control": True,
         "enable_adaptive_router": True,
+        "enable_runtime_planner": False,
+    },
+    PipelineVariant.POLICY_DRIVEN: {
+        "label": "Policy-Driven RAGOps",
+        "description": "Next-Gen Policy-Driven Adaptive AI Runtime with typed ExecutionPlan, budget constraints, early exits, and adaptive top-k.",
+        "use_hybrid_search": True,
+        "use_reranker": True,
+        "use_query_rewriting": True,
+        "use_multi_query": True,
+        "use_contextual_compressor": True,
+        "use_conflict_detector": True,
+        "use_cross_reference": True,
+        "use_confidence_gate": True,
+        "use_self_correction": True,
+        "use_absence_prover": True,
+        "use_semantic_cache": True,
+        "use_output_contract": True,
+        "use_cost_control": True,
+        "enable_adaptive_router": True,
+        "enable_runtime_planner": True,
     },
 }
 

@@ -89,5 +89,35 @@ class BGEReranker:
             print(f"Error in reranking: {e}. Falling back to default order.")
             return chunks[:top_k]
 
+    def adaptive_rerank(
+        self,
+        query: str,
+        chunks: List[Any],
+        confidence: float = 0.50,
+        top_k: int = 5,
+        allow_rerank_skip: bool = True
+    ) -> Tuple[List[Any], dict]:
+        """
+        Adaptive reranking policy decision:
+        - confidence >= 0.85 and allow_rerank_skip: skip cross-encoder reranking (save latency & cost)
+        - confidence >= 0.50: standard rerank
+        - confidence < 0.50: expand top_k + rerank
+        Returns (reranked_chunks, stats_dict).
+        """
+        if confidence >= 0.85 and allow_rerank_skip:
+            return chunks[:top_k], {
+                "reranked": False,
+                "reason": "HIGH initial confidence (>=0.85): skipped expensive cross-encoder reranker",
+                "avoided_reranker_cost_tokens": len(chunks) * 50
+            }
+
+        effective_k = top_k if confidence >= 0.50 else max(top_k + 3, 10)
+        reranked = self.rerank(query, chunks, top_k=effective_k)
+        return reranked, {
+            "reranked": True,
+            "reason": "MEDIUM/LOW confidence: cross-encoder reranked candidate set",
+            "avoided_reranker_cost_tokens": 0
+        }
+
 # Singleton instance
 reranker_service = BGEReranker()
