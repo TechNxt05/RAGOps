@@ -37,7 +37,7 @@ RAGOps has been enhanced with production-grade components designed to optimize r
 ### Ingestion and Retrieval Core
 * **DeltaIndexer**: Hashes document chunk payloads during ingestion, computing differentials to add, update, or prune only modified chunks in FAISS indices.
   * *Implementation*: [DeltaIndexer](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/delta_indexer.py)
-* **DoclingParser**: Advanced layout-aware document parser targeting PDFs and Word files to extract tables, captions, headers, and semantic structures natively.
+* **DoclingParser**: Advanced layout-aware document parser targeting PDFs and Word files to extract tables, captions, headers, and semantic structures natively. Integrated with **Anthropic Contextual Retrieval** to generate 2-3 sentence situating context headers per chunk pre-embedding.
   * *Implementation*: [DoclingParser](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/docling_parser.py)
 * **MultiQueryRetriever**: Employs query-variant generation pipelines, executing parallel searches and deduplicating results to maximize semantic context coverage.
   * *Implementation*: [MultiQueryRetriever](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/multi_query_retriever.py)
@@ -57,6 +57,8 @@ RAGOps has been enhanced with production-grade components designed to optimize r
   * *Implementation*: [SemanticRouter](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/semantic_router.py)
 * **ContextualCompressor**: A query-aware sentence-level compressor that strips filler text while preserving key entities, currencies, codes, and numerical values verbatim.
   * *Implementation*: [ContextualCompressor](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/contextual_compressor.py)
+* **LiteLLM Gateway**: Unified multi-provider LLM call gateway wrapping Groq, Gemini, Anthropic, and OpenAI with retries and automatic provider fallback.
+  * *Implementation*: [LiteLLMGateway](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/litellm_gateway.py)
 * **RAGASEvaluator**: Purely deterministic mapping of quality signals to the standard RAGAS triad:
   * *Context Relevance*: How relevant retrieved chunks are to the user's query.
   * *Faithfulness*: If response statements are fully supported by context.
@@ -109,8 +111,8 @@ RAGOps incorporates an adaptive retrieval routing framework, interactive executi
 ### 1. Adaptive Retrieval Router
 Instead of executing a heavy hybrid retrieval pipeline uniformly across all queries, the `AdaptiveRetrievalRouter` analyzes query feature scores to dispatch each query to the exact retrieval backend required:
 - **Exact/Keyword Lookup** (`INV-2024`, product codes, IDs) $\rightarrow$ **BM25 Search Only**
-- **Structured Aggregation** (counts, totals, averages, math) $\rightarrow$ **ComputationRouter**
-- **Relationship / Multi-hop** (cross-entity lineage) $\rightarrow$ **GraphRAG Path** (stubbed with explicit TODO)
+- **Structured Aggregation** (counts, totals, averages, math) $\rightarrow$ **ComputationRouter** or **Connected External Database**
+- **Relationship / Multi-hop** (cross-entity lineage) $\rightarrow$ **GraphRAG Stage 1** ([graph_rag_service.py](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/graph_rag_service.py))
 - **Semantic / Fuzzy** (broad natural language questions) $\rightarrow$ **FAISS + BM25 + RRF Hybrid**
 
 Every routed query logs a `RouterDecision` record: `{query, chosen_backend, confidence, feature_scores, fallback_triggered, reasoning}`.
