@@ -135,6 +135,36 @@ Extends the model router with a second axis: routing model selection by reasonin
 ### 5. Prefill/Decode Latency Analytics (TTFT & TPOT)
 Splits overall latency metrics into **TTFT** (Time-To-First-Token, compute/prefill-bound) and **TPOT** (Time-Per-Output-Token, memory/decode-bound), surfacing both in project analytics.
 
+### 6. FastMCP Server for RAGOps
+RAGOps exposes a native FastMCP stdio server ([backend/mcp_server.py](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/mcp_server.py)) with 5 tools for integration with Claude Desktop, LangGraph pipelines, and external AI agents:
+1. `query_knowledge_base` — Run full hybrid search pipeline returning answer, sources, and claim verification metrics.
+2. `retrieve_chunks` — Retrieval-only tool returning raw context chunks.
+3. `run_computation_query` — Direct route to ComputationRouter / External Database Connector.
+4. `check_router_decision` — Inspect AdaptiveRetrievalRouter classification rationale without executing retrieval.
+5. `get_project_health` — Surfaces 24h rolling p95 latency, SLA status, TTFT/TPOT, cache hit rate, and router distribution.
+
+**Claude Desktop Configuration (`mcp_config/claude_desktop_config.json`):**
+```json
+{
+  "mcpServers": {
+    "ragops": {
+      "command": "python",
+      "args": ["backend/mcp_server.py"],
+      "env": {
+        "DATABASE_URL": "postgresql://postgres:password@localhost:5432/ragops",
+        "SECRET_KEY": "your-secret-key"
+      }
+    }
+  }
+}
+```
+
+### 7. AI-Assisted External Database Connector & Table Retrieval
+- **Per-Project External DB Connections**: Supports connecting external PostgreSQL, MySQL, or MongoDB databases to answer questions against live structured databases.
+- **Envelope Encryption**: Password and connection URIs encrypted at rest via Fernet using `SECRET_KEY` ([credential_vault.py](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/db_connector/credential_vault.py)). Secret redaction (`redact_secrets()`) guarantees credentials never appear in OTel spans or OpenSmith traces.
+- **Structural Read-Only Security**: Connection-level read-only session enforcement (`SET TRANSACTION READ ONLY`) and pre-execution AST allowlist validation ([query_executor.py](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/db_connector/query_executor.py)).
+- **Build 3 Hybrid Table Retrieval**: Uses BM25 + dense embedding table retriever ([schema_introspector.py](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/db_connector/schema_introspector.py)) to select top-N relevant tables for multi-table schemas (20+ tables).
+
 Each variant is evaluated on: **RAGAS triad** (context relevance, faithfulness, answer relevance), **groundedness**, **hallucination risk**, **latency**, **token cost**, and **cache hit rate**.
 
 Results are rendered as an ASCII leaderboard and a structured JSON report.

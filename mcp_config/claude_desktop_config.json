@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "ragops": {
+      "command": "python",
+      "args": ["backend/mcp_server.py"],
+      "env": {
+        "DATABASE_URL": "postgresql://postgres:password@localhost:5432/ragops",
+        "SECRET_KEY": "your-prod-secret-key-change-this",
+        "GROQ_API_KEY": "gsk_...",
+        "GEMINI_API_KEY": "AIzaSy..."
+      },
+      "description": "RAGOps — Enterprise hybrid RAG execution, raw chunk retrieval, computation routing, adaptive classification, and SLA telemetry."
+    }
+  }
+}

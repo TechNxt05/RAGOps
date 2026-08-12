@@ -297,13 +297,17 @@ class RAGEngine:
         Executes a single hybrid retrieval search (semantic + BM25 if configured),
         filtering by inactive documents, and optionally by document_id or sources.
         """
-        if not os.path.exists(VECTOR_STORE_PATH):
-            return []
-            
         try:
             config = self.get_active_config(project_id)
         except ValueError:
             config = RAGConfig(project_id=project_id)
+
+        index_file = os.path.join(VECTOR_STORE_PATH, "index.faiss")
+        if not os.path.exists(VECTOR_STORE_PATH) or not os.path.exists(index_file):
+            if config.use_hybrid_search and bm25_manager.index_exists(str(project_id)):
+                raw_bm25 = bm25_manager.search(str(project_id), query, top_k=k)
+                return [(LCDocument(page_content=t[0], metadata={"source": "bm25", "doc_id": t[1]}), 1.0) for t in raw_bm25]
+            return []
             
         embeddings = self._get_embeddings(config)
         vector_store = FAISS.load_local(

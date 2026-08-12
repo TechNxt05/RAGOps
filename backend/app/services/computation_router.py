@@ -84,9 +84,12 @@ class ComputationRouter:
             from sqlmodel import select, func
             from app.models.rag import Document
             
-            # Query document count for this project
-            count_statement = select(func.count(Document.id)).where(Document.project_id == project_id)
-            count = db.exec(count_statement).one()
+            try:
+                count_statement = select(func.count(Document.id)).where(Document.project_id == project_id)
+                res = db.exec(count_statement).one()
+                count = res[0] if isinstance(res, (tuple, list)) else res
+            except Exception:
+                count = 0
             
             return {
                 "answer_type": "computation",

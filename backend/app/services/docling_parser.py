@@ -22,6 +22,26 @@ class DoclingParser:
     def is_available(self) -> bool:
         converter = self._get_converter()
         return converter is not False and converter is not None
+
+    async def contextualize_chunk(self, chunk_content: str, document_title: str = "") -> str:
+        """
+        Anthropic Contextual Retrieval Technique:
+        Generates a 2-3 sentence situating context header for the chunk prior to embedding and indexing.
+        Reduces retrieval failure rates significantly.
+        """
+        try:
+            from app.services.litellm_gateway import litellm_gateway
+            prompt = (
+                f"Document Title: {document_title}\n"
+                f"Chunk Content:\n{chunk_content}\n\n"
+                "Provide a short 2-sentence context header situating this chunk within the parent document. "
+                "Output ONLY the context header string."
+            )
+            res = await litellm_gateway.generate(prompt=prompt, temperature=0.1)
+            situating_context = res.content.strip()
+            return f"Context: {situating_context}\n\n{chunk_content}"
+        except Exception:
+            return chunk_content
     
     def parse(self, pdf_path: str) -> dict:
         """

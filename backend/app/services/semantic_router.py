@@ -1,3 +1,6 @@
+from enum import Enum
+from typing import Optional, Any
+
 class ReasoningEffort(Enum):
     LOW = "low"         # Factoid / ID lookup -> fast model, low max_tokens
     MEDIUM = "medium"   # Procedural / Definitional -> standard model

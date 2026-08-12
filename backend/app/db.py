@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 # Import models so SQLModel metadata registers all tables before create_all
 from app.models.user import User  # noqa: F401
-from app.models.rag import Project, RAGConfig, Document, Chunk  # noqa: F401
+from app.models.rag import Project, RAGConfig, Document, Chunk, ExternalDatabase  # noqa: F401
 from app.models.chat import ChatSession, Message  # noqa: F401
 from app.models.usage import TokenUsage  # noqa: F401
 from app.models.query_log import QueryLog  # noqa: F401
@@ -26,7 +26,15 @@ def get_session():
         yield session
 
 def init_db():
-    SQLModel.metadata.create_all(engine)
+    global engine
+    try:
+        SQLModel.metadata.create_all(engine)
+    except Exception as exc:
+        print(f"Database connection fallback ({exc}). Initializing local SQLite database.")
+        engine = create_engine("sqlite:///./ragops.db", connect_args={"check_same_thread": False})
+        SQLModel.metadata.create_all(engine)
+        return
+
     # Ensure newly added columns exist in PostgreSQL without requiring manual Alembic migrations
     with engine.begin() as conn:
         from sqlalchemy import text

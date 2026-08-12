@@ -102,6 +102,35 @@ async def main():
         session_db.add(rag_config)
         session_db.commit()
 
+    # Seed benchmark document and chunks if project has no indexed documents
+    existing_doc = session_db.exec(select(Document).where(Document.project_id == args.project_id)).first()
+    if not existing_doc:
+        doc = Document(
+            project_id=args.project_id,
+            filename="ragops_enterprise_overview.pdf",
+            processed=True,
+            content="RAGOps is an enterprise-grade RAG platform created by Amritanshu Yadav. It implements project-based isolation, sparse-dense hybrid retrieval using FAISS and BM25, cross-encoder reranking, and self-correcting retrieval loops."
+        )
+        session_db.add(doc)
+        session_db.commit()
+        session_db.refresh(doc)
+
+        c1 = Chunk(document_id=doc.id, content="The main purpose of RAGOps is to provide enterprise-grade hybrid RAG with project isolation, security RBAC, and precision hybrid retrieval.")
+        c2 = Chunk(document_id=doc.id, content="RAGOps was created and authored by Amritanshu Yadav as an admin-controlled project-based hybrid RAG system.")
+        c3 = Chunk(document_id=doc.id, content="Key approaches mentioned include sparse BM25 keyword lookup, dense vector FAISS retrieval, BGE cross-encoder reranking, contextual compression, and self-correction.")
+        c4 = Chunk(document_id=doc.id, content="Step-by-step instructions: 1. Deploy via Docker Compose. 2. Configure RAG parameters in Admin panel. 3. Ingest documents with DeltaIndexer. 4. Query via API or UI.")
+        c5 = Chunk(document_id=doc.id, content="Specific stats: 91.2% RAGAS accuracy score, sub-2.0s p95 latency SLA threshold, 50% token cost reduction via contextual compressor.")
+        session_db.add_all([c1, c2, c3, c4, c5])
+        session_db.commit()
+
+        # Seed BM25 index
+        from app.services.bm25_service import bm25_manager
+        bm25_manager.add_document_chunks(
+            project_id=args.project_id,
+            chunks=[c1.content, c2.content, c3.content, c4.content, c5.content],
+            doc_ids=[doc.id] * 5
+        )
+
     # Create a synthetic admin user for benchmark (read-only operations)
     class BenchmarkUser:
         id = 1

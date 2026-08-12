@@ -17,7 +17,7 @@ from app.services.computation_router import ComputationRouter
 
 class RouterDecision(BaseModel):
     query: str
-    chosen_backend: str  # "bm25", "computation", "graph", "hybrid"
+    chosen_backend: str  # "bm25", "computation", "live_database", "graph", "hybrid"
     confidence: float = Field(ge=0.0, le=1.0)
     feature_scores: Dict[str, float]
     fallback_triggered: bool = False
@@ -54,7 +54,7 @@ class AdaptiveRetrievalRouter:
     def __init__(self):
         self.computation_router = ComputationRouter()
 
-    def classify(self, query: str) -> RouterDecision:
+    def classify(self, query: str, has_external_db: bool = False) -> RouterDecision:
         """
         Classify query into optimal retrieval backend with feature scoring rationale.
         """
@@ -102,15 +102,21 @@ class AdaptiveRetrievalRouter:
                 reasoning=f"High exact ID/code pattern match (score {id_score:.2f}). Dispatched to BM25 index."
             )
 
-        # Priority 2: Aggregation / Calculation -> Computation backend
+        # Priority 2: Aggregation / Calculation -> Connected External DB or Computation backend
         if agg_score >= 0.65:
+            chosen = "live_database" if has_external_db else "computation"
+            reason = (
+                f"Structured aggregation keywords detected (score {agg_score:.2f}). Dispatched to connected External Database."
+                if has_external_db else
+                f"Structured aggregation keywords detected (score {agg_score:.2f}). Dispatched to ComputationRouter."
+            )
             return RouterDecision(
                 query=query_str,
-                chosen_backend="computation",
+                chosen_backend=chosen,
                 confidence=agg_score,
                 feature_scores=feature_scores,
                 fallback_triggered=False,
-                reasoning=f"Structured aggregation keywords detected (score {agg_score:.2f}). Dispatched to ComputationRouter."
+                reasoning=reason
             )
 
         # Priority 3: Graph / Multi-hop relationship -> GraphRAG (Stubbed)
@@ -135,12 +141,9 @@ class AdaptiveRetrievalRouter:
             reasoning="Broad natural language query. Dispatched to default Hybrid FAISS + BM25 + RRF pipeline."
         )
 
-    def execute_graph_backend(self, query: str) -> None:
+    def execute_graph_backend(self, query: str) -> list:
         """
-        Stub method for GraphRAG backend path.
-        Raises NotImplementedError with clear TODO per architecture specification.
+        Executes Stage 1 structure-only document graph walk for relationship/multi-hop queries.
         """
-        raise NotImplementedError(
-            "GraphRAG Knowledge Graph backend is not yet implemented. "
-            "TODO: Build Entity-Relation Graph indexer & Graph Walk Retriever in Phase 2."
-        )
+        from app.services.graph_rag_service import graph_rag_service
+        return graph_rag_service.search_structural_graph(query)

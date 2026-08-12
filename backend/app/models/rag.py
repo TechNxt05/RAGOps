@@ -94,3 +94,20 @@ class Chunk(SQLModel, table=True):
     chunk_version: int = Field(default=1)
     doc_id_version: Optional[str] = Field(default=None, max_length=256)
     chunk_index: Optional[int] = Field(default=None)
+
+
+class ExternalDatabase(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id", index=True)
+    db_type: str = Field(index=True)  # postgresql, mysql, mongodb
+    host: str
+    port: int
+    db_name: str
+    username: str
+    encrypted_credentials: str  # Fernet encrypted password / payload
+    ssl_mode: Optional[str] = Field(default="prefer")
+    schema_cache: Optional[dict] = Field(default=None, sa_column=Column(JSON))
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
