@@ -94,7 +94,7 @@ async def verify_phase2():
     from app.services.db_connector.query_executor import query_executor
     from app.services.db_connector.connection_parser import connection_parser
 
-    secret = "SuperSecretPassword123!"
+    secret = "MockTestSecretPassword!"
     encrypted = credential_vault.encrypt(secret)
     decrypted = credential_vault.decrypt(encrypted)
     assert decrypted == secret
@@ -102,9 +102,9 @@ async def verify_phase2():
     print("  ✅ Fernet Credential Encryption & Decryption: VERIFIED (Encrypted string is opaque)")
 
     # Test Secret Redaction from Traces
-    raw_uri = "postgresql://admin_user:SuperSecretPassword123!@db.internal.example.com:5432/orders_db"
+    raw_uri = "postgresql://admin_user:MockTestSecretPassword!@db.internal.example.com:5432/orders_db"
     redacted_uri = credential_vault.redact_secrets(raw_uri)
-    assert "SuperSecretPassword123!" not in redacted_uri
+    assert "MockTestSecretPassword!" not in redacted_uri
     assert "***" in redacted_uri
     print(f"  ✅ Trace Secret Redaction: VERIFIED -> '{redacted_uri}'")
 
@@ -123,7 +123,7 @@ async def verify_phase2():
 
     # 3. Connection Parser & Wizard Summary
     print("\n[3/6] Verifying Connection Parser & Confirmation Summaries...")
-    parsed_res = connection_parser.parse_connection_string("postgresql://dbuser:pass123@db.prod.company.com:5432/analytics")
+    parsed_res = connection_parser.parse_connection_string("postgresql://mock_user:mock_password@mock_db_host:5432/analytics_db")
     assert parsed_res["success"] is True
     assert "Confirm to save?" in parsed_res["confirmation_summary"]
     print(f"  ✅ Connection Parser: {parsed_res['confirmation_summary']}")
