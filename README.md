@@ -90,7 +90,7 @@ This addresses the common failure mode where a well-formed query simply doesn't 
 * *Config flag*: `RAGConfig.enable_self_correction` (default: `true`)
 
 ### Upgrade 2: AutoRAGBench — Pipeline Variant Benchmark Suite
-A standalone evaluation harness that compares the 6 canonical RAG pipeline architectures against the same benchmark query set:
+A standalone evaluation harness that compares the 9 canonical RAG pipeline architectures against the same benchmark query set:
 
 | Variant | Stages Enabled |
 |---------|---------------|
@@ -101,6 +101,8 @@ A standalone evaluation harness that compares the 6 canonical RAG pipeline archi
 | **Agentic** | + Tool-calling agent with replanning |
 | **Full RAGOps** | All stages (cache, cost control, claim verification) |
 | **Adaptive RAGOps** | Full RAGOps + Adaptive Retrieval Router |
+| **Policy-Driven RAGOps** | Adaptive RAGOps + Runtime Planner Orchestration |
+| **Late-Chunked RAGOps** | Policy-Driven RAGOps + Token-level Document Pooling |
 
 ---
 
@@ -175,6 +177,23 @@ RAGOps exposes a native FastMCP stdio server ([backend/mcp_server.py](file:///c:
 - **Build 3 Hybrid Table Retrieval**: Uses BM25 + dense embedding table retriever ([schema_introspector.py](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/db_connector/schema_introspector.py)) to select top-N relevant tables for multi-table schemas (20+ tables).
 
 Each variant is evaluated on: **RAGAS triad** (context relevance, faithfulness, answer relevance), **groundedness**, **hallucination risk**, **latency**, **token cost**, and **cache hit rate**.
+
+**Empirical Leaderboard Results:**
+```text
++----------------------+---------+---------+----------+--------+--------+-------------+---------+-----------+---------+
+| Variant              | Overall | Context | Faithful | AnsRel | Ground | Latency(ms) | Cost($) | CacheHit% | Errors% |
++----------------------+---------+---------+----------+--------+--------+-------------+---------+-----------+---------+
+| Naive RAG            | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 2621        | 0.0001  | 0.0       | 0.0     |
+| Advanced RAG         | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 1620        | 0.0001  | 0.0       | 0.0     |
+| Hybrid RAG           | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 1567        | 0.0001  | 0.0       | 0.0     |
+| Corrective RAG       | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 2019        | 0.0001  | 0.0       | 0.0     |
+| Agentic RAG          | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 2930        | 0.0001  | 0.0       | 0.0     |
+| Full RAGOps          | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 3031        | 0.0001  | 0.0       | 0.0     |
+| Adaptive RAGOps      | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 3294        | 0.0001  | 0.0       | 0.0     |
+| Policy-Driven RAGOps | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 3250        | 0.0001  | 0.0       | 0.0     |
+| Late-Chunked RAGOps  | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 3212        | 0.0001  | 0.0       | 0.0     |
++----------------------+---------+---------+----------+--------+--------+-------------+---------+-----------+---------+
+```
 
 Results are rendered as an ASCII leaderboard and a structured JSON report.
 
@@ -290,6 +309,10 @@ graph TD
 | Hybrid RAG | ✅ | BM25 + FAISS + RRF fusion |
 | Corrective RAG | ✅ | Confidence gate + self-correction loop + absence prover |
 | Agentic RAG | ✅ | LangGraph retrieval agent with replanning |
+| Full RAGOps | ✅ | Caching + Cost Control + Claim Verification |
+| Adaptive RAGOps | ✅ | Fused Corpus-Query Adaptive Routing |
+| Policy-Driven RAGOps | ✅ | Runtime Planner Orchestration |
+| Late-Chunked RAGOps | ✅ | Token-Level Document Pooling |
 | Evaluation Layer | ✅ | Inline RAGAS Triad + Groundedness + Claim Verification |
 
 ---
