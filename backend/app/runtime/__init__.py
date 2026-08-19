@@ -12,6 +12,8 @@ from app.runtime.constraint_engine import ConstraintEngine
 from app.runtime.decision_log import DecisionLogger, DecisionRecord
 from app.runtime.registry import ModelRegistry, ModelProfile
 from app.runtime.planner import RuntimePlanner
+from app.runtime.context_builder import UnifiedContextBuilder, context_builder
+from app.runtime.cache_policy import CachePolicyEngine, cache_policy_engine
 
 __all__ = [
     "RuntimeState",
@@ -27,4 +29,8 @@ __all__ = [
     "ModelRegistry",
     "ModelProfile",
     "RuntimePlanner",
+    "UnifiedContextBuilder",
+    "context_builder",
+    "CachePolicyEngine",
+    "cache_policy_engine",
 ]

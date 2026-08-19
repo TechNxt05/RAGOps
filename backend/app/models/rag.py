@@ -17,7 +17,7 @@ class RAGConfig(SQLModel, table=True):
 
     # Model orchestration (defaults match chat UI)
     primary_llm_provider: str = Field(default="groq")
-    primary_llm_name: str = Field(default="llama-3.3-70b-versatile")
+    primary_llm_name: str = Field(default="llama3-70b-8192")
     fallback_llm_provider: str = Field(default="google")
     fallback_llm_name: str = Field(default="gemini-1.5-flash")
     embedding_model: str = Field(default="google-embedding-001")

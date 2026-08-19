@@ -19,6 +19,7 @@ class PipelineVariant(str, Enum):
     FULL_RAGOPS = "full_ragops"
     ADAPTIVE = "adaptive"
     POLICY_DRIVEN = "policy_driven"
+    LATE_CHUNKING = "late_chunking"
 
 
 # ------------------------------------------------------------------
@@ -169,6 +170,26 @@ VARIANT_CONFIGS: Dict[PipelineVariant, Dict[str, Any]] = {
         "use_cost_control": True,
         "enable_adaptive_router": True,
         "enable_runtime_planner": True,
+    },
+    PipelineVariant.LATE_CHUNKING: {
+        "label": "Late-Chunked RAGOps",
+        "description": "Long-context token-pooling Late Chunking strategy isolated from pre-embedding Contextual Retrieval blurbs.",
+        "use_hybrid_search": True,
+        "use_reranker": True,
+        "use_query_rewriting": True,
+        "use_multi_query": False,
+        "use_contextual_compressor": True,
+        "use_conflict_detector": True,
+        "use_cross_reference": True,
+        "use_confidence_gate": True,
+        "use_self_correction": True,
+        "use_absence_prover": True,
+        "use_semantic_cache": True,
+        "use_output_contract": True,
+        "use_cost_control": True,
+        "enable_adaptive_router": True,
+        "enable_runtime_planner": False,
+        "enable_late_chunking": True,
     },
 }
 

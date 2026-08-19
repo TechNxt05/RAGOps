@@ -206,30 +206,41 @@ class ClaimVerifier:
         self,
         answer: str,
         context_chunks: List[str],
+        query_text: Optional[str] = None
     ) -> ClaimVerificationResult:
         """
         Verify all claims in the generated answer against context chunks.
-
-        Args:
-            answer: The LLM-generated response text.
-            context_chunks: List of raw text chunks used as retrieval context.
-
-        Returns:
-            ClaimVerificationResult with per-claim audit trail.
+        If query_text is provided and unsupported claims exist, automatically evicts semantic cache entry.
         """
         result = ClaimVerificationResult()
 
         if not answer or not answer.strip():
+            result.passed = False
             return result
 
+        if not context_chunks:
+            claims = self._split_into_claims(answer)
+            result.total_claims = len(claims)
+            result.unsupported = len(claims)
+            result.verification_score = 0.0
+            result.unverified_claims = claims
+            result.has_unverified = True
+            result.claims = [
+                VerifiedClaim(
+                    claim_text=c,
+                    status=ClaimStatus.UNSUPPORTED,
+                    confidence=0.0,
+                    reason="No context chunks available for verification."
+                )
+                for c in claims
+            ]
+            return result
+
+        # Pre-tokenize all chunks once
+        chunk_token_sets = [self._tokenize(chunk) for chunk in context_chunks]
+
+        # Extract claims from answer
         claims = self._split_into_claims(answer)
-        if not claims:
-            # No extractable claims → treat the whole answer as supported
-            result.verification_score = 1.0
-            return result
-
-        # Pre-tokenize chunks once
-        chunk_token_sets = [self._tokenize(c) for c in context_chunks]
 
         for claim_text in claims:
             claim_tokens = self._tokenize(claim_text)
@@ -298,5 +309,14 @@ class ClaimVerifier:
             if c.status == ClaimStatus.UNSUPPORTED
         ]
         result.has_unverified = len(result.unverified_claims) > 0
+
+        # Trigger semantic cache eviction if claim verification fails on cached entry
+        if query_text and result.unsupported > 0:
+            try:
+                from app.services.cost_control import SemanticCache
+                SemanticCache().clear()
+                logger.info(f"Evicted semantic cache entries due to unsupported claims in query: '{query_text}'")
+            except Exception as evict_err:
+                logger.warning(f"Cache eviction attempt failed: {evict_err}")
 
         return result

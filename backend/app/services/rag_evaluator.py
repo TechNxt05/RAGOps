@@ -54,7 +54,20 @@ def evaluate_rag_response(
     grounding = _max_grounding_similarity(response, context_chunks)
     faithfulness = score_faithfulness(response, context_chunks)
     hallucination_risk = max(0.0, min(1.0, 1.0 - grounding))
-    overall = grounding * 0.6 + faithfulness * 0.4
+
+    # Calculate context relevance (query vs chunks)
+    context_relevance = _max_grounding_similarity(query, context_chunks) if context_chunks else 0.0
+
+    # Calculate answer relevance (query vs response)
+    answer_relevance = 0.5
+    if query.strip() and response.strip():
+        q_words = set(w.lower() for w in query.split() if len(w) > 2)
+        r_words = set(w.lower() for w in response.split() if len(w) > 2)
+        if q_words and r_words:
+            overlap = len(q_words & r_words) / len(q_words)
+            answer_relevance = min(1.0, max(0.1, overlap * 1.5))
+
+    overall = context_relevance * 0.25 + faithfulness * 0.35 + answer_relevance * 0.25 + grounding * 0.15
 
     label = (
         "EXCELLENT"
@@ -67,8 +80,12 @@ def evaluate_rag_response(
     )
 
     return {
-        "hallucination_score": hallucination_risk,
+        "context_relevance": context_relevance,
+        "faithfulness": faithfulness,
         "faithfulness_score": faithfulness,
+        "answer_relevance": answer_relevance,
+        "groundedness": grounding,
+        "hallucination_score": hallucination_risk,
         "overall_quality_score": overall,
         "quality_label": label,
     }

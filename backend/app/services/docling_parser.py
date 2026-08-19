@@ -58,24 +58,33 @@ class DoclingParser:
             # Extract text blocks with section context
             text_blocks = []
             for item in doc.texts:
+                sec_title = item.text if item.label in ["section_header", "title"] else ""
                 text_blocks.append({
                     "content": item.text,
                     "label": item.label,  # paragraph, section_header, title, etc.
-                    "page": getattr(item, "page_no", None),
+                    "element_type": item.label,
+                    "page": getattr(item, "page_no", 1),
+                    "page_number": getattr(item, "page_no", 1),
+                    "section": sec_title,
+                    "parent_id": str(getattr(item, "parent", None)) if hasattr(item, "parent") else None,
                     "is_heading": item.label in ["section_header", "title"],
                 })
             
-            # Extract tables as markdown
+            # Extract tables as markdown with repeated headers
             tables = []
-            for table in doc.tables:
+            for table_idx, table in enumerate(doc.tables):
                 try:
-                    markdown_rows = self._table_to_markdown(table)
+                    markdown_rows = self._table_to_markdown(table, repeat_table_header=True)
                     tables.append({
                         "content": "\n".join(markdown_rows),
                         "label": "table",
+                        "element_type": "table",
+                        "page_number": getattr(table, "page_no", 1),
+                        "section": f"Table {table_idx + 1}",
+                        "parent_id": None,
                         "row_count": table.data.num_rows,
                         "col_count": table.data.num_cols,
-                        "page": getattr(table, "page_no", None),
+                        "page": getattr(table, "page_no", 1),
                     })
                 except Exception as e:
                     logger.warning(f"Table extraction failed: {e}")
@@ -115,7 +124,7 @@ class DoclingParser:
             logger.error(f"Docling parsing failed: {e}, falling back")
             return self._fallback_parse(pdf_path)
     
-    def _table_to_markdown(self, table) -> list:
+    def _table_to_markdown(self, table, repeat_table_header: bool = False) -> list:
         """Convert Docling TableItem to markdown rows."""
         n_rows = table.data.num_rows
         n_cols = table.data.num_cols

@@ -123,12 +123,10 @@ async def main():
         session_db.add_all([c1, c2, c3, c4, c5])
         session_db.commit()
 
-        # Seed BM25 index
-        from app.services.bm25_service import bm25_manager
-        bm25_manager.build_index(
-            str(args.project_id),
-            [c1.content, c2.content, c3.content, c4.content, c5.content]
-        )
+        # Seed FAISS and BM25 index
+        from app.rag.engine import RAGEngine
+        rag_engine = RAGEngine(session_db)
+        rag_engine.rebuild_full_index()
 
     # Create a synthetic admin user for benchmark (read-only operations)
     class BenchmarkUser:

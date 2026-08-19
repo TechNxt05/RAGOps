@@ -99,8 +99,7 @@ class RAGASEvaluator:
     ) -> float:
         """
         How relevant are retrieved chunks to the query?
-        Uses TF-IDF cosine similarity between query and each chunk.
-        Returns average similarity across top chunks.
+        Uses word overlap + sub-phrase TF-IDF cosine similarity.
         """
         if existing and "context_relevance" in existing:
             return float(existing["context_relevance"])
@@ -108,22 +107,36 @@ class RAGASEvaluator:
         if not chunks:
             return 0.0
         
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        from sklearn.metrics.pairwise import cosine_similarity
-        import numpy as np
-        
-        chunk_texts = [c.get("content", "") for c in chunks[:5]]
-        if not any(chunk_texts):
+        chunk_texts = [c.get("content", "") for c in chunks[:5] if c.get("content")]
+        if not chunk_texts:
             return 0.0
         
         try:
-            vectorizer = TfidfVectorizer(stop_words="english")
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            from sklearn.metrics.pairwise import cosine_similarity
+            import numpy as np
+            
+            # Word overlap token scoring
+            q_words = set(w.lower() for w in query.split() if len(w) > 1)
+            if not q_words:
+                return 0.5
+            
+            overlap_scores = []
+            for ct in chunk_texts:
+                c_words = set(ct.lower().split())
+                overlap = len(q_words & c_words) / max(len(q_words), 1)
+                overlap_scores.append(overlap)
+            
+            # TF-IDF similarity without aggressive stop word removal
+            vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1)
             all_texts = [query] + chunk_texts
             tfidf_matrix = vectorizer.fit_transform(all_texts)
             query_vec = tfidf_matrix[0]
             chunk_vecs = tfidf_matrix[1:]
-            similarities = cosine_similarity(query_vec, chunk_vecs)[0]
-            return float(np.mean(similarities))
+            tfidf_sims = cosine_similarity(query_vec, chunk_vecs)[0]
+            
+            combined = 0.5 * np.mean(overlap_scores) + 0.5 * np.mean(tfidf_sims)
+            return float(min(1.0, max(0.0, combined)))
         except Exception:
             return 0.5
     
@@ -135,7 +148,6 @@ class RAGASEvaluator:
     ) -> float:
         """
         Is every claim in the answer supported by retrieved chunks?
-        Reuses existing faithfulness score if available.
         """
         if existing and "faithfulness" in existing:
             return float(existing["faithfulness"])
@@ -144,30 +156,20 @@ class RAGASEvaluator:
         if existing and "hallucination_score" in existing:
             return 1.0 - float(existing["hallucination_score"])
         
-        if not chunks or not answer:
+        if not chunks or not answer or not answer.strip():
             return 0.0
         
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        from sklearn.metrics.pairwise import cosine_similarity
+        context_text = " ".join(c.get("content", "") for c in chunks[:5]).lower()
+        if not context_text.strip():
+            return 0.0
         
-        context = " ".join(c.get("content", "") for c in chunks[:5])
-        
-        try:
-            sentences = [s.strip() for s in answer.split(".") if len(s.strip()) > 10]
-            if not sentences:
-                return 0.5
-            
-            vectorizer = TfidfVectorizer(stop_words="english")
-            all_texts = [context] + sentences
-            tfidf_matrix = vectorizer.fit_transform(all_texts)
-            context_vec = tfidf_matrix[0]
-            sentence_vecs = tfidf_matrix[1:]
-            
-            import numpy as np
-            similarities = cosine_similarity(context_vec, sentence_vecs)[0]
-            return float(np.mean(similarities))
-        except Exception:
+        answer_words = [w.lower() for w in answer.split() if w.isalnum() and len(w) > 2]
+        if not answer_words:
             return 0.5
+        
+        context_words = set(context_text.split())
+        matched = sum(1 for w in answer_words if w in context_words)
+        return float(min(1.0, matched / len(answer_words)))
     
     def _compute_answer_relevance(
         self, 
@@ -177,22 +179,30 @@ class RAGASEvaluator:
     ) -> float:
         """
         Does the answer address what the user asked?
-        TF-IDF similarity between query and answer.
+        Word overlap + sub-phrase TF-IDF similarity.
         """
         if existing and "answer_relevance" in existing:
             return float(existing["answer_relevance"])
         
-        if not query or not answer:
+        if not query or not answer or not answer.strip():
             return 0.0
         
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        from sklearn.metrics.pairwise import cosine_similarity
-        
         try:
-            vectorizer = TfidfVectorizer(stop_words="english")
+            q_words = set(w.lower() for w in query.split() if len(w) > 1)
+            a_words = set(w.lower() for w in answer.split() if len(w) > 1)
+            if not q_words or not a_words:
+                return 0.5
+            
+            overlap = len(q_words & a_words) / max(len(q_words), 1)
+            
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            from sklearn.metrics.pairwise import cosine_similarity
+            
+            vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1)
             tfidf_matrix = vectorizer.fit_transform([query, answer])
-            similarity = cosine_similarity(tfidf_matrix[0], tfidf_matrix[1])[0][0]
-            return float(similarity)
+            tfidf_sim = cosine_similarity(tfidf_matrix[0], tfidf_matrix[1])[0][0]
+            
+            return float(min(1.0, max(0.0, 0.4 * overlap + 0.6 * tfidf_sim)))
         except Exception:
             return 0.5
     
@@ -204,32 +214,23 @@ class RAGASEvaluator:
     ) -> float:
         """
         Is the answer grounded in retrieved sources rather than LLM priors?
-        Proxy: token overlap between answer and retrieved context.
         """
         if existing and "groundedness" in existing:
             return float(existing["groundedness"])
         
-        if not chunks or not answer:
+        if not chunks or not answer or not answer.strip():
             return 0.0
         
         context_tokens = set(
             " ".join(c.get("content", "") for c in chunks).lower().split()
         )
-        answer_tokens = set(answer.lower().split())
+        answer_tokens = [w.lower() for w in answer.split() if len(w) > 2]
         
         if not answer_tokens:
-            return 0.0
-        
-        # Remove stopwords for meaningful overlap
-        stopwords = {"the", "a", "an", "is", "are", "was", "were", "in",
-                    "of", "to", "and", "or", "for", "with", "by", "at"}
-        answer_content_tokens = answer_tokens - stopwords
-        
-        if not answer_content_tokens:
             return 0.5
         
-        overlap = len(answer_content_tokens & context_tokens)
-        return min(1.0, overlap / len(answer_content_tokens))
+        grounded_count = sum(1 for t in answer_tokens if t in context_tokens)
+        return float(min(1.0, grounded_count / len(answer_tokens)))
     
     def _label(self, score: float) -> str:
         if score >= 0.8:

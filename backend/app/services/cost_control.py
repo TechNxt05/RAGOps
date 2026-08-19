@@ -104,6 +104,11 @@ class SemanticCache:
         self._hits = 0
         self._misses = 0
     
+    def clear(self) -> None:
+        """Evict all entries from semantic cache."""
+        with self._lock:
+            self._entries.clear()
+
     def get(self, query: str) -> Optional[str]:
         with self._lock:
             self._prune_expired()

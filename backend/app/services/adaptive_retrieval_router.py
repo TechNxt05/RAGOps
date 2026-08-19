@@ -20,6 +20,7 @@ class RouterDecision(BaseModel):
     chosen_backend: str  # "bm25", "computation", "live_database", "graph", "hybrid"
     confidence: float = Field(ge=0.0, le=1.0)
     feature_scores: Dict[str, float]
+    corpus_feature_scores: Optional[Dict[str, Any]] = None
     fallback_triggered: bool = False
     reasoning: str
 
@@ -47,16 +48,22 @@ GRAPH_KEYWORDS = {
 
 class AdaptiveRetrievalRouter:
     """
-    Query-classification layer that dispatches each incoming query
-    to the specific retrieval backend actually suited to it.
+    Fused Query-and-Corpus classification layer that dispatches each incoming query
+    to the specific retrieval backend actually suited to it based on query intent
+    and corpus structural properties (RAGRouter-Bench extension).
     """
 
     def __init__(self):
         self.computation_router = ComputationRouter()
 
-    def classify(self, query: str, has_external_db: bool = False) -> RouterDecision:
+    def classify(
+        self,
+        query: str,
+        has_external_db: bool = False,
+        corpus_signals: Optional[Dict[str, Any]] = None
+    ) -> RouterDecision:
         """
-        Classify query into optimal retrieval backend with feature scoring rationale.
+        Classify query into optimal retrieval backend fusing query signals with corpus structural features.
         """
         query_str = query.strip()
         query_lower = query_str.lower()
@@ -80,6 +87,17 @@ class AdaptiveRetrievalRouter:
         graph_hit_count = sum(1 for kw in GRAPH_KEYWORDS if kw in query_lower)
         graph_score = min(1.0, graph_hit_count * 0.45)
 
+        # Corpus signal fusion adjustments (RAGRouter-Bench Extension)
+        if corpus_signals:
+            tbl_density = float(corpus_signals.get("table_density", 0.0))
+            xref_density = float(corpus_signals.get("cross_ref_density", 0.0))
+            depth = float(corpus_signals.get("section_depth", 1.0))
+
+            if tbl_density >= 0.25 and agg_score >= 0.35:
+                agg_score = min(1.0, agg_score + 0.30)
+            if (xref_density >= 0.15 or depth >= 2.5) and graph_score >= 0.35:
+                graph_score = min(1.0, graph_score + 0.30)
+
         # Feature D: Keyword density score vs natural language flow
         keyword_density = len(set(words)) / float(max(len(words), 1))
         
@@ -98,6 +116,7 @@ class AdaptiveRetrievalRouter:
                 chosen_backend="bm25",
                 confidence=id_score,
                 feature_scores=feature_scores,
+                corpus_feature_scores=corpus_signals,
                 fallback_triggered=False,
                 reasoning=f"High exact ID/code pattern match (score {id_score:.2f}). Dispatched to BM25 index."
             )
@@ -115,19 +134,21 @@ class AdaptiveRetrievalRouter:
                 chosen_backend=chosen,
                 confidence=agg_score,
                 feature_scores=feature_scores,
+                corpus_feature_scores=corpus_signals,
                 fallback_triggered=False,
                 reasoning=reason
             )
 
-        # Priority 3: Graph / Multi-hop relationship -> GraphRAG (Stubbed)
+        # Priority 3: Graph / Multi-hop relationship -> GraphRAG
         if graph_score >= 0.65:
             return RouterDecision(
                 query=query_str,
                 chosen_backend="graph",
                 confidence=graph_score,
                 feature_scores=feature_scores,
+                corpus_feature_scores=corpus_signals,
                 fallback_triggered=False,
-                reasoning=f"Cross-entity relationship signals detected (score {graph_score:.2f}). Targeted GraphRAG backend (stubbed -> fallback hybrid)."
+                reasoning=f"Cross-entity relationship signals detected (score {graph_score:.2f}). Targeted GraphRAG backend."
             )
 
         # Default: Hybrid FAISS + BM25 + RRF
@@ -137,6 +158,7 @@ class AdaptiveRetrievalRouter:
             chosen_backend="hybrid",
             confidence=round(hybrid_confidence, 3),
             feature_scores=feature_scores,
+            corpus_feature_scores=corpus_signals,
             fallback_triggered=False,
             reasoning="Broad natural language query. Dispatched to default Hybrid FAISS + BM25 + RRF pipeline."
         )

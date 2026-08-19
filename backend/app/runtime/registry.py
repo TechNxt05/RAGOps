@@ -18,8 +18,8 @@ class ModelProfile(BaseModel):
 
 
 DEFAULT_MODEL_PROFILES: Dict[str, ModelProfile] = {
-    "groq/llama-3.3-70b-versatile": ModelProfile(
-        model_name="groq/llama-3.3-70b-versatile",
+    "groq/llama3-8b-8192": ModelProfile(
+        model_name="groq/llama3-8b-8192",
         provider="groq",
         context_window=128000,
         reasoning_level="STANDARD",
@@ -58,7 +58,7 @@ class ModelRegistry:
         self._profiles: Dict[str, ModelProfile] = dict(DEFAULT_MODEL_PROFILES)
 
     def get_profile(self, model_name: str) -> ModelProfile:
-        return self._profiles.get(model_name, DEFAULT_MODEL_PROFILES["groq/llama-3.3-70b-versatile"])
+        return self._profiles.get(model_name, DEFAULT_MODEL_PROFILES["gemini/gemini-1.5-flash"])
 
     def select_best_model(self, max_latency_ms: int, max_cost: float, reasoning_level: str) -> str:
         """Selects optimal model candidate satisfying constraints."""
@@ -76,4 +76,4 @@ class ModelRegistry:
                 return high_candidates[0].model_name
 
         # Return default fast versatile model
-        return "groq/llama-3.3-70b-versatile"
+        return "gemini/gemini-1.5-flash"
