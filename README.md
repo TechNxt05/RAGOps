@@ -14,7 +14,7 @@ In the modern enterprise, deploying simple vector-search chatbots is insufficien
 2. **Lexical vs. Semantic Precision**: Pure semantic vector searches fail on specific keyword lookups (like invoice numbers or specialized codes), while pure keyword search misses conceptual context. RAGOps solves this using **Sparse/Dense Hybrid Search (FAISS + BM25)** fused via **Reciprocal Rank Fusion (RRF)**.
 3. **Context Noise & Cost**: Feeding massive, redundant chunks to LLMs wastes tokens and dilutes generation quality. RAGOps incorporates a **Deep Cross-Encoder Reranker (BGE-Reranker)** and a **Sentence-Level Contextual Compressor** to keep only the highest relevance data.
 
-All of these capabilities are coordinated by the main orchestrator, [RAGEngine](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/rag/engine.py), and served via API endpoints defined in [chat_routes.py](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/rag/chat_routes.py).
+All of these capabilities are coordinated by the main orchestrator, [RAGEngine](./backend/app/rag/engine.py), and served via API endpoints defined in [chat_routes.py](./backend/app/rag/chat_routes.py).
 
 ---
 
@@ -24,51 +24,51 @@ RAGOps has been enhanced with production-grade components designed to optimize r
 
 ### Query Intelligence Layer
 * **Turn-Type Router**: Session-aware gating that classifies query intents into `CHIT_CHAT`, `RETRIEVAL`, or `FOLLOW_UP`. It bypasses the retrieval pipeline for chit-chat or fetches directly from cache for session follow-ups.
-  * *Implementation*: [TurnTypeRouter](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/turn_type_router.py)
+  * *Implementation*: [TurnTypeRouter](./backend/app/services/turn_type_router.py)
 * **Pre-Retrieval Query Rewriter**: History-aware query rewriter that leverages conversation history to expand search query candidates, solving pronoun reference dilution.
-  * *Implementation*: [QueryRewriter](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/query_rewriter.py)
+  * *Implementation*: [QueryRewriter](./backend/app/services/query_rewriter.py)
 * **Computation Router**: Directly translates analytical database questions into SQL query statements, bypassing standard vector document retrieval and returning exact database calculations.
-  * *Implementation*: [ComputationRouter](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/computation_router.py)
+  * *Implementation*: [ComputationRouter](./backend/app/services/computation_router.py)
 * **Constraint Extractor**: Identifies and extracts hard constraints from queries (e.g. excluded terms, date boundaries, file types, source patterns) and applies them dynamically to context chunks.
-  * *Implementation*: [ConstraintExtractor](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/constraint_extractor.py)
+  * *Implementation*: [ConstraintExtractor](./backend/app/services/constraint_extractor.py)
 * **Session Context Cache**: Implements an active memory bank caching raw context chunks for follow-up questions, preventing redundant vector search retrievals.
-  * *Implementation*: [SessionContextCache](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/session_context_cache.py)
+  * *Implementation*: [SessionContextCache](./backend/app/services/session_context_cache.py)
 
 ### Ingestion and Retrieval Core
 * **DeltaIndexer**: Hashes document chunk payloads during ingestion, computing differentials to add, update, or prune only modified chunks in FAISS indices.
-  * *Implementation*: [DeltaIndexer](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/delta_indexer.py)
+  * *Implementation*: [DeltaIndexer](./backend/app/services/delta_indexer.py)
 * **DoclingParser**: Advanced layout-aware document parser targeting PDFs and Word files to extract tables, captions, headers, and semantic structures natively. Integrated with **Anthropic Contextual Retrieval** to generate 2-3 sentence situating context headers per chunk pre-embedding.
-  * *Implementation*: [DoclingParser](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/docling_parser.py)
+  * *Implementation*: [DoclingParser](./backend/app/services/docling_parser.py)
 * **MultiQueryRetriever**: Employs query-variant generation pipelines, executing parallel searches and deduplicating results to maximize semantic context coverage.
-  * *Implementation*: [MultiQueryRetriever](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/multi_query_retriever.py)
+  * *Implementation*: [MultiQueryRetriever](./backend/app/services/multi_query_retriever.py)
 * **CrossReferenceResolver**: Scans chunks for internal references (e.g., "see Section 4.2", "detailed in Appendix B") and resolves them by retrieving the parent/child chunks.
-  * *Implementation*: [CrossReferenceResolver](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/cross_reference_resolver.py)
+  * *Implementation*: [CrossReferenceResolver](./backend/app/services/cross_reference_resolver.py)
 * **ConflictDetector**: Compares facts across retrieved chunks, highlighting contradictory numbers, dates, or statements from different files to alert users.
-  * *Implementation*: [ConflictDetector](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/conflict_detector.py)
+  * *Implementation*: [ConflictDetector](./backend/app/services/conflict_detector.py)
 * **AbsenceProver**: Handles low-confidence queries by checking if information is truly absent in the database, yielding verified refusals.
-  * *Implementation*: [AbsenceProver](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/absence_prover.py)
+  * *Implementation*: [AbsenceProver](./backend/app/services/absence_prover.py)
 * **IngestionScanner**: Periodic local directory scanner that automatically discovers, extracts, and indexes documents in the background.
-  * *Implementation*: [IngestionScanner](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/ingestion_scanner.py)
+  * *Implementation*: [IngestionScanner](./backend/app/services/ingestion_scanner.py)
 * **VersionedSemanticCache**: Semantic cache that maps questions to answers while respecting document versions and hashing signatures.
-  * *Implementation*: [VersionedSemanticCache](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/versioned_cache.py)
+  * *Implementation*: [VersionedSemanticCache](./backend/app/services/versioned_cache.py)
 
 ### Evaluation and Output Layer
 * **SemanticRouter**: Classifies queries into `FACTOID`, `ANALYTICAL`, `COMPARATIVE`, `PROCEDURAL`, or `DEFINITIONAL`, dynamically choosing search strategies (`FAST`, `STANDARD`, `DEEP`, `PARALLEL`) to override retrieval top_k, multi-query, and reranking parameters.
-  * *Implementation*: [SemanticRouter](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/semantic_router.py)
+  * *Implementation*: [SemanticRouter](./backend/app/services/semantic_router.py)
 * **ContextualCompressor**: A query-aware sentence-level compressor that strips filler text while preserving key entities, currencies, codes, and numerical values verbatim.
-  * *Implementation*: [ContextualCompressor](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/contextual_compressor.py)
+  * *Implementation*: [ContextualCompressor](./backend/app/services/contextual_compressor.py)
 * **LiteLLM Gateway**: Unified multi-provider LLM call gateway wrapping Groq, Gemini, Anthropic, and OpenAI with retries and automatic provider fallback.
-  * *Implementation*: [LiteLLMGateway](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/litellm_gateway.py)
+  * *Implementation*: [LiteLLMGateway](./backend/app/services/litellm_gateway.py)
 * **RAGASEvaluator**: Purely deterministic mapping of quality signals to the standard RAGAS triad:
   * *Context Relevance*: How relevant retrieved chunks are to the user's query.
   * *Faithfulness*: If response statements are fully supported by context.
   * *Answer Relevance*: How directly the generated answer addresses the question.
   * *Groundedness*: Fraction of generated response tokens present in source documents.
-  * *Implementation*: [RAGASEvaluator](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/ragas_metrics.py)
+  * *Implementation*: [RAGASEvaluator](./backend/app/services/ragas_metrics.py)
 * **OutputContract**: Generates and enforces formatting constraints (`CONCISE`, `STRUCTURED`, `DETAILED`, `TABLE`, or `CODE`) with post-generation compliance checks.
-  * *Implementation*: [OutputContractBuilder](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/output_contract.py)
+  * *Implementation*: [OutputContractBuilder](./backend/app/services/output_contract.py)
 * **PromptCacheManager**: Structures system prompts to enable prefix caching for Anthropic (using `cache_control` markers) and OpenAI, logging cost-savings estimations.
-  * *Implementation*: [PromptCacheManager](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/prompt_cache_manager.py)
+  * *Implementation*: [PromptCacheManager](./backend/app/services/prompt_cache_manager.py)
 
 ---
 
@@ -85,8 +85,8 @@ When the Confidence Gate scores retrieval between 0.35 and 0.65 (the "gray zone"
 
 This addresses the common failure mode where a well-formed query simply doesn't match the document's phrasing, recovering ~30% of borderline refusals.
 
-* *Implementation*: [SelfCorrectionPolicy](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/self_correction_loop.py)
-* *Pipeline integration*: [chat_routes.py L553-L622](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/rag/chat_routes.py#L553-L622)
+* *Implementation*: [SelfCorrectionPolicy](./backend/app/services/self_correction_loop.py)
+* *Pipeline integration*: [chat_routes.py L553-L622](./backend/app/rag/chat_routes.py#L553-L622)
 * *Config flag*: `RAGConfig.enable_self_correction` (default: `true`)
 
 ### Upgrade 2: AutoRAGBench — Pipeline Variant Benchmark Suite
@@ -111,7 +111,7 @@ A standalone evaluation harness that compares the 9 canonical RAG pipeline archi
 RAGOps incorporates an adaptive retrieval routing framework, interactive execution graph tracing, reasoning-effort model routing, and prefill/decode latency analytics.
 
 ### 0. Policy-Driven Adaptive AI Runtime (Paper #4 Foundation)
-RAGOps includes a centralized orchestration layer ([backend/app/runtime/](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/runtime/)) that dynamically allocates computation per request:
+RAGOps includes a centralized orchestration layer ([backend/app/runtime/](./backend/app/runtime/)) that dynamically allocates computation per request:
 - **`RuntimeState`**: Typed Pydantic v2 lifecycle state tracking query complexity, entity density, feature flags, budget constraints, and trace events.
 - **`ExecutionPlan`**: Pre-execution blueprint resolved before pipeline execution, specifying `retrieval_strategy`, `retrieval_top_k`, `reranking`, `graph_expansion`, `model`, `reasoning_effort`, and `verification_level`.
 - **`PolicyEngine` & `ConstraintEngine`**: Enforces latency (`latency_budget_ms`), cost (`cost_budget`), and retry boundaries (`max_retries`), gracefully degrading retrieval depth or skipping reranking under tight budgets.
@@ -121,12 +121,12 @@ RAGOps includes a centralized orchestration layer ([backend/app/runtime/](file:/
 Instead of executing a heavy hybrid retrieval pipeline uniformly across all queries, the `AdaptiveRetrievalRouter` analyzes query feature scores to dispatch each query to the exact retrieval backend required:
 - **Exact/Keyword Lookup** (`INV-2024`, product codes, IDs) $\rightarrow$ **BM25 Search Only**
 - **Structured Aggregation** (counts, totals, averages, math) $\rightarrow$ **ComputationRouter** or **Connected External Database**
-- **Relationship / Multi-hop** (cross-entity lineage) $\rightarrow$ **GraphRAG Stage 1** ([graph_rag_service.py](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/graph_rag_service.py))
+- **Relationship / Multi-hop** (cross-entity lineage) $\rightarrow$ **GraphRAG Stage 1** ([graph_rag_service.py](./backend/app/services/graph_rag_service.py))
 - **Semantic / Fuzzy** (broad natural language questions) $\rightarrow$ **FAISS + BM25 + RRF Hybrid**
 
 Every routed query logs a `RouterDecision` record: `{query, chosen_backend, confidence, feature_scores, fallback_triggered, reasoning}`.
 
-* *Implementation*: [AdaptiveRetrievalRouter](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/adaptive_retrieval_router.py)
+* *Implementation*: [AdaptiveRetrievalRouter](./backend/app/services/adaptive_retrieval_router.py)
 * *Config flag*: `RAGConfig.enable_adaptive_router` (default `true`)
 
 ### 2. Interactive Execution Graph & Telemetry (OpenSmith vs. Langfuse Decision)
@@ -147,7 +147,7 @@ Extends the model router with a second axis: routing model selection by reasonin
 Splits overall latency metrics into **TTFT** (Time-To-First-Token, compute/prefill-bound) and **TPOT** (Time-Per-Output-Token, memory/decode-bound), surfacing both in project analytics.
 
 ### 6. FastMCP Server for RAGOps
-RAGOps exposes a native FastMCP stdio server ([backend/mcp_server.py](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/mcp_server.py)) with 5 tools for integration with Claude Desktop, LangGraph pipelines, and external AI agents:
+RAGOps exposes a native FastMCP stdio server ([backend/mcp_server.py](./backend/mcp_server.py)) with 5 tools for integration with Claude Desktop, LangGraph pipelines, and external AI agents:
 1. `query_knowledge_base` — Run full hybrid search pipeline returning answer, sources, and claim verification metrics.
 2. `retrieve_chunks` — Retrieval-only tool returning raw context chunks.
 3. `run_computation_query` — Direct route to ComputationRouter / External Database Connector.
@@ -172,26 +172,28 @@ RAGOps exposes a native FastMCP stdio server ([backend/mcp_server.py](file:///c:
 
 ### 7. AI-Assisted External Database Connector & Table Retrieval
 - **Per-Project External DB Connections**: Supports connecting external PostgreSQL, MySQL, or MongoDB databases to answer questions against live structured databases.
-- **Envelope Encryption**: Password and connection URIs encrypted at rest via Fernet using `SECRET_KEY` ([credential_vault.py](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/db_connector/credential_vault.py)). Secret redaction (`redact_secrets()`) guarantees credentials never appear in OTel spans or OpenSmith traces.
-- **Structural Read-Only Security**: Connection-level read-only session enforcement (`SET TRANSACTION READ ONLY`) and pre-execution AST allowlist validation ([query_executor.py](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/db_connector/query_executor.py)).
-- **Build 3 Hybrid Table Retrieval**: Uses BM25 + dense embedding table retriever ([schema_introspector.py](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/db_connector/schema_introspector.py)) to select top-N relevant tables for multi-table schemas (20+ tables).
+- **Envelope Encryption**: Password and connection URIs encrypted at rest via Fernet using `SECRET_KEY` ([credential_vault.py](./backend/app/services/db_connector/credential_vault.py)). Secret redaction (`redact_secrets()`) guarantees credentials never appear in OTel spans or OpenSmith traces.
+- **Structural Read-Only Security**: Connection-level read-only session enforcement (`SET TRANSACTION READ ONLY`) and pre-execution AST allowlist validation ([query_executor.py](./backend/app/services/db_connector/query_executor.py)).
+- **Build 3 Hybrid Table Retrieval**: Uses BM25 + dense embedding table retriever ([schema_introspector.py](./backend/app/services/db_connector/schema_introspector.py)) to select top-N relevant tables for multi-table schemas (20+ tables).
 
 Each variant is evaluated on: **RAGAS triad** (context relevance, faithfulness, answer relevance), **groundedness**, **hallucination risk**, **latency**, **token cost**, and **cache hit rate**.
+
+*Benchmark undergoing corpus/query-set expansion — current numbers reflect a small (6-query) sample and should not yet be treated as final.*
 
 **Empirical Leaderboard Results:**
 ```text
 +----------------------+---------+---------+----------+--------+--------+-------------+---------+-----------+---------+
 | Variant              | Overall | Context | Faithful | AnsRel | Ground | Latency(ms) | Cost($) | CacheHit% | Errors% |
 +----------------------+---------+---------+----------+--------+--------+-------------+---------+-----------+---------+
-| Naive RAG            | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 2621        | 0.0001  | 0.0       | 0.0     |
-| Advanced RAG         | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 1620        | 0.0001  | 0.0       | 0.0     |
-| Hybrid RAG           | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 1567        | 0.0001  | 0.0       | 0.0     |
-| Corrective RAG       | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 2019        | 0.0001  | 0.0       | 0.0     |
-| Agentic RAG          | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 2930        | 0.0001  | 0.0       | 0.0     |
-| Full RAGOps          | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 3031        | 0.0001  | 0.0       | 0.0     |
-| Adaptive RAGOps      | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 3294        | 0.0001  | 0.0       | 0.0     |
-| Policy-Driven RAGOps | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 3250        | 0.0001  | 0.0       | 0.0     |
-| Late-Chunked RAGOps  | 0.304   | 0.000   | 0.500    | 0.215  | 0.500  | 3212        | 0.0001  | 0.0       | 0.0     |
+| Advanced RAG         | 0.447   | 0.107   | 0.540    | 0.536  | 0.605  | 8219        | 0.0000  | 0.0       | 0.0     |
+| Agentic RAG          | 0.436   | 0.107   | 0.542    | 0.528  | 0.567  | 6837        | 0.0000  | 0.0       | 0.0     |
+| Late-Chunked RAGOps  | 0.426   | 0.107   | 0.522    | 0.518  | 0.557  | 8530        | 0.0000  | 0.0       | 0.0     |
+| Adaptive RAGOps      | 0.417   | 0.107   | 0.505    | 0.499  | 0.558  | 8645        | 0.0000  | 0.0       | 0.0     |
+| Hybrid RAG           | 0.407   | 0.107   | 0.515    | 0.463  | 0.543  | 7329        | 0.0000  | 0.0       | 0.0     |
+| Corrective RAG       | 0.403   | 0.107   | 0.493    | 0.470  | 0.542  | 7414        | 0.0000  | 0.0       | 0.0     |
+| Full RAGOps          | 0.397   | 0.107   | 0.482    | 0.475  | 0.524  | 7425        | 0.0000  | 0.0       | 0.0     |
+| Naive RAG            | 0.392   | 0.107   | 0.478    | 0.466  | 0.517  | 10839       | 0.0000  | 0.0       | 0.0     |
+| Policy-Driven RAGOps | 0.390   | 0.107   | 0.467    | 0.462  | 0.524  | 8238        | 0.0000  | 0.0       | 0.0     |
 +----------------------+---------+---------+----------+--------+--------+-------------+---------+-----------+---------+
 ```
 
@@ -203,11 +205,11 @@ cd backend
 python run_benchmark.py --project-id 1 --verbose
 ```
 
-* *Implementation*: [benchmark/](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/benchmark/)
-  * [variants.py](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/benchmark/variants.py) — 6 variant configuration maps
-  * [runner.py](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/benchmark/runner.py) — Benchmark execution engine
-  * [report.py](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/benchmark/report.py) — ASCII table & JSON report generator
-* *CLI*: [run_benchmark.py](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/run_benchmark.py)
+* *Implementation*: [benchmark/](./backend/app/benchmark/)
+  * [variants.py](./backend/app/benchmark/variants.py) — 6 variant configuration maps
+  * [runner.py](./backend/app/benchmark/runner.py) — Benchmark execution engine
+  * [report.py](./backend/app/benchmark/report.py) — ASCII table & JSON report generator
+* *CLI*: [run_benchmark.py](./backend/run_benchmark.py)
 
 ### Upgrade 3: Claim-Level Citation Verification
 A post-generation verification pass that decomposes the LLM-generated answer into **atomic claims** (sentence-level), then checks each claim against the retrieved context chunks using coverage-biased token overlap scoring:
@@ -222,8 +224,8 @@ The verifier also performs **numeric mismatch detection** — flagging claims th
 
 Results are attached to the API response as `claim_verification`, and any unsupported claims are surfaced in the `output_contract.unverified_claims` array as explicit warnings.
 
-* *Implementation*: [ClaimVerifier](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/services/claim_verifier.py)
-* *Pipeline integration*: [chat_routes.py L1073-L1087](file:///c:/Users/Amritanshu/OneDrive/Desktop/Project%20-%202/RAGOps/backend/app/rag/chat_routes.py#L1073-L1087)
+* *Implementation*: [ClaimVerifier](./backend/app/services/claim_verifier.py)
+* *Pipeline integration*: [chat_routes.py L1073-L1087](./backend/app/rag/chat_routes.py#L1073-L1087)
 
 ---
 
@@ -415,35 +417,14 @@ Chat response content successfully returned!
 
 ## 📊 AutoRAGBench — Pipeline Benchmark
 
-Compare all 7 RAG pipeline variants against the same benchmark queries:
+Compare all 9 RAG pipeline variants against the same benchmark queries:
 
 ```bash
 cd backend
 python run_benchmark.py --project-id 1 --verbose --output benchmark_report.json
 ```
 
-**Example Output:**
-```text
-╔═══════════════════════════════════════════════════════════════════════╗
-║              AutoRAGBench — Pipeline Variant Leaderboard             ║
-╚═══════════════════════════════════════════════════════════════════════╝
-
-+-----------------+---------+---------+----------+--------+-------+------------+--------+----------+---------+
-| Variant         | Overall | Context | Faithful | AnsRel | Ground| Latency(ms)| Cost($)| CacheHit%| Errors% |
-+-----------------+---------+---------+----------+--------+-------+------------+--------+----------+---------+
-| Adaptive RAGOps | 0.935   | 0.915   | 0.960    | 0.910  | 0.940 | 2100       | 0.0036 | 12.5     | 0.0     |
-| Full RAGOps     | 0.912   | 0.890   | 0.945    | 0.880  | 0.920 | 3200       | 0.0045 | 12.5     | 0.0     |
-| Agentic         | 0.885   | 0.870   | 0.920    | 0.860  | 0.890 | 4100       | 0.0052 | 0.0      | 0.0     |
-| Corrective      | 0.860   | 0.850   | 0.900    | 0.840  | 0.860 | 2800       | 0.0038 | 0.0      | 0.0     |
-| Hybrid          | 0.780   | 0.790   | 0.820    | 0.760  | 0.780 | 1900       | 0.0030 | 0.0      | 0.0     |
-| Advanced        | 0.720   | 0.730   | 0.770    | 0.700  | 0.710 | 1500       | 0.0025 | 0.0      | 0.0     |
-| Naive           | 0.580   | 0.600   | 0.620    | 0.550  | 0.560 | 800        | 0.0018 | 0.0      | 0.0     |
-+-----------------+---------+---------+----------+--------+-------+------------+--------+----------+---------+
-
-🏆 Best Quality:  Adaptive RAGOps (overall=0.935)
-💰 Cheapest:      Naive (cost=$0.0018)
-⚡ Fastest:       Naive (latency=800ms)
-```
+> Run the benchmark to generate a live leaderboard comparing Naive RAG through Full RAGOps across context relevance, faithfulness, answer relevance, groundedness, latency, token cost, and cache hit rate.
 
 ---
 

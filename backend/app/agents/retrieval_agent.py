@@ -313,7 +313,7 @@ def generate_response(state: AgentState, config: dict = None) -> dict:
     context = state["context"]
     
     model_provider = configurable.get("model_provider", "groq")
-    model_name = configurable.get("model_name", "llama-3.3-70b-versatile")
+    model_name = configurable.get("model_name", "llama3-70b-8192")
     temperature = configurable.get("temperature", 0.1)
     chat_history = configurable.get("chat_history", [])
     other_context_str = configurable.get("other_context_str", "")

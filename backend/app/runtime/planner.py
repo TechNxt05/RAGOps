@@ -87,9 +87,12 @@ class RuntimePlanner:
 
         # Determine adaptive retrieval top_k & reranking
         if state.intent == QueryIntent.FACTOID or chosen_backend == "bm25":
-            top_k = 5
-            reranking = False
-            reasoning_effort = "LOW"
+            top_k = 7
+            reranking = True
+            
+            # Use LOW reasoning only for trivial ID lookups, otherwise STANDARD
+            is_trivial_lookup = (chosen_backend == "bm25" and len(query.split()) <= 4)
+            reasoning_effort = "LOW" if is_trivial_lookup else "STANDARD"
         elif state.intent == QueryIntent.COMPARATIVE:
             top_k = 10
             reranking = True

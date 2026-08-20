@@ -32,17 +32,29 @@ def render_ascii_table(summaries: List[VariantSummary]) -> str:
         "Errors%",
     ]
 
+    import math
     rows = []
     for s in sorted(summaries, key=lambda x: x.avg_overall_score, reverse=True):
+        # Calculate standard deviation for overall score
+        valid_results = [r.ragas_overall for r in s.query_results if r.error is None]
+        n_ok = len(valid_results)
+        if n_ok > 1:
+            mean = sum(valid_results) / n_ok
+            variance = sum((x - mean) ** 2 for x in valid_results) / (n_ok - 1)
+            std_dev = math.sqrt(variance)
+            overall_str = f"{_fmt(s.avg_overall_score)} ± {_fmt(std_dev, 2)}"
+        else:
+            overall_str = _fmt(s.avg_overall_score)
+            
         rows.append([
             s.label,
-            _fmt(s.avg_overall_score),
+            overall_str,
             _fmt(s.avg_context_relevance),
             _fmt(s.avg_faithfulness),
             _fmt(s.avg_answer_relevance),
             _fmt(s.avg_groundedness),
             _fmt(s.avg_latency_ms, 0),
-            _fmt(s.total_token_cost, 4),
+            _fmt(s.total_token_cost, 6),
             _fmt(s.cache_hit_rate * 100, 1),
             _fmt(s.error_rate * 100, 1),
         ])
@@ -79,8 +91,44 @@ def render_ascii_table(summaries: List[VariantSummary]) -> str:
         cheapest = min(summaries, key=lambda s: s.total_token_cost)
         fastest = min(summaries, key=lambda s: s.avg_latency_ms)
         lines.append(f"[Best Quality]:  {best.label} (overall={_fmt(best.avg_overall_score)})")
-        lines.append(f"[Cheapest]:      {cheapest.label} (cost=${_fmt(cheapest.total_token_cost, 4)})")
+        lines.append(f"[Cheapest]:      {cheapest.label} (cost=${_fmt(cheapest.total_token_cost, 6)})")
         lines.append(f"[Fastest]:       {fastest.label} (latency={_fmt(fastest.avg_latency_ms, 0)}ms)")
+        lines.append("")
+
+    # If any deterministic metrics exist, print a second table
+    has_retrieval_metrics = any(s.avg_recall_at_5 > 0 or s.avg_mrr > 0 for s in summaries)
+    if has_retrieval_metrics:
+        ret_headers = ["Variant", "Recall@5", "Precision@5", "MRR", "nDCG@5"]
+        ret_rows = []
+        for s in sorted(summaries, key=lambda x: x.avg_ndcg_at_5, reverse=True):
+            ret_rows.append([
+                s.label,
+                _fmt(s.avg_recall_at_5),
+                _fmt(s.avg_precision_at_5),
+                _fmt(s.avg_mrr),
+                _fmt(s.avg_ndcg_at_5)
+            ])
+            
+        ret_col_widths = [len(h) for h in ret_headers]
+        for row in ret_rows:
+            for i, cell in enumerate(row):
+                ret_col_widths[i] = max(ret_col_widths[i], len(cell))
+                
+        ret_sep = "+" + "+".join("-" * (w + 2) for w in ret_col_widths) + "+"
+        ret_header_line = "|" + "|".join(f" {h:<{ret_col_widths[i]}} " for i, h in enumerate(ret_headers)) + "|"
+        
+        lines.extend([
+            "+-----------------------------------------------------------------------+",
+            "|                Deterministic Retrieval Quality Metrics                |",
+            "+-----------------------------------------------------------------------+",
+            "",
+            ret_sep,
+            ret_header_line,
+            ret_sep
+        ])
+        for row in ret_rows:
+            lines.append("|" + "|".join(f" {cell:<{ret_col_widths[i]}} " for i, cell in enumerate(row)) + "|")
+        lines.append(ret_sep)
         lines.append("")
 
     return "\n".join(lines)

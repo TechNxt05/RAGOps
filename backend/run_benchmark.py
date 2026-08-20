@@ -19,7 +19,7 @@ import logging
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(override=True)
 
 # Patch httpx 0.28+ breaking change (proxies argument removed in favor of proxy)
 try:
@@ -54,7 +54,12 @@ async def main():
     parser.add_argument("--variants", type=str, default=None, help="Comma-separated list of variants (e.g. naive,hybrid,full_ragops)")
     parser.add_argument("--output", type=str, default="benchmark_report.json", help="Output JSON report path")
     parser.add_argument("--verbose", action="store_true", help="Show per-query detail")
+    parser.add_argument("--resume", action="store_true", default=True, help="Resume from partial state if it exists (default: True)")
+    parser.add_argument("--fresh", action="store_true", help="Force a clean start, ignoring any partial state")
     args = parser.parse_args()
+
+    if args.fresh:
+        args.resume = False
 
     if sys.platform == "win32":
         try:
@@ -103,25 +108,40 @@ async def main():
         session_db.commit()
 
     # Seed benchmark document and chunks if project has no indexed documents
-    existing_doc = session_db.exec(select(Document).where(Document.project_id == args.project_id)).first()
+    from app.models.rag import Document, Chunk
+    existing_doc = session_db.exec(select(Document).where(Document.project_id == args.project_id).where(Document.filename == "quantum_computing.txt")).first()
     if not existing_doc:
+        logger.info("Ingesting Quantum Computing corpus...")
+        qc_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "quantum_computing.txt")
+        if os.path.exists(qc_path):
+            with open(qc_path, "r", encoding="utf-8") as f:
+                content = f.read()
+        else:
+            content = "Quantum computing is a rapidly-emerging technology that harnesses the laws of quantum mechanics to solve problems too complex for classical computers."
+            
         doc = Document(
             project_id=args.project_id,
-            filename="ragops_enterprise_overview.pdf",
+            filename="quantum_computing.txt",
             processed=True,
-            content="RAGOps is an enterprise-grade RAG platform created by Amritanshu Yadav. It implements project-based isolation, sparse-dense hybrid retrieval using FAISS and BM25, cross-encoder reranking, and self-correcting retrieval loops."
+            content=content[:10000] # Limit metadata size
         )
         session_db.add(doc)
         session_db.commit()
         session_db.refresh(doc)
 
-        c1 = Chunk(document_id=doc.id, content="The main purpose of RAGOps is to provide enterprise-grade hybrid RAG with project isolation, security RBAC, and precision hybrid retrieval.")
-        c2 = Chunk(document_id=doc.id, content="RAGOps was created and authored by Amritanshu Yadav as an admin-controlled project-based hybrid RAG system.")
-        c3 = Chunk(document_id=doc.id, content="Key approaches mentioned include sparse BM25 keyword lookup, dense vector FAISS retrieval, BGE cross-encoder reranking, contextual compression, and self-correction.")
-        c4 = Chunk(document_id=doc.id, content="Step-by-step instructions: 1. Deploy via Docker Compose. 2. Configure RAG parameters in Admin panel. 3. Ingest documents with DeltaIndexer. 4. Query via API or UI.")
-        c5 = Chunk(document_id=doc.id, content="Specific stats: 91.2% RAGAS accuracy score, sub-2.0s p95 latency SLA threshold, 50% token cost reduction via contextual compressor.")
-        session_db.add_all([c1, c2, c3, c4, c5])
+        # Basic Recursive Character Chunking
+        from langchain.text_splitter import RecursiveCharacterTextSplitter
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=150)
+        splits = text_splitter.split_text(content)
+        
+        chunks = []
+        for i, split in enumerate(splits):
+            c = Chunk(document_id=doc.id, content=split, chunk_index=i)
+            chunks.append(c)
+            
+        session_db.add_all(chunks)
         session_db.commit()
+        logger.info(f"Ingested {len(chunks)} chunks from Quantum Computing corpus.")
 
         # Seed FAISS and BM25 index
         from app.rag.engine import RAGEngine
@@ -139,6 +159,8 @@ async def main():
             session_db=session_db,
             user=BenchmarkUser(),
             variants=variant_filter,
+            resume=args.resume,
+            output_file=args.output
         )
 
         logger.info(f"Starting AutoRAGBench for project_id={args.project_id}")

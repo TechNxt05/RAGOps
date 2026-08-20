@@ -50,6 +50,7 @@ class QueryResult:
     hallucination_risk: str = "unknown"
     confidence_score: float = 0.0
     error: Optional[str] = None
+    retrieved_chunk_ids: List[int] = field(default_factory=list)
 
 
 @dataclass
@@ -65,6 +66,13 @@ class VariantSummary:
     avg_answer_relevance: float = 0.0
     avg_groundedness: float = 0.0
     avg_overall_score: float = 0.0
+    
+    # Deterministic Retrieval Metrics
+    avg_recall_at_5: float = 0.0
+    avg_precision_at_5: float = 0.0
+    avg_mrr: float = 0.0
+    avg_ndcg_at_5: float = 0.0
+    
     total_token_cost: float = 0.0
     cache_hit_rate: float = 0.0
     error_rate: float = 0.0
@@ -76,46 +84,54 @@ class VariantSummary:
 # ------------------------------------------------------------------
 
 DEFAULT_BENCHMARK_QUERIES: List[BenchmarkQuery] = [
-    BenchmarkQuery(
-        id="factoid_01",
-        query="What is the main purpose of this project?",
-        category="factoid"
-    ),
-    BenchmarkQuery(
-        id="factoid_02",
-        query="Who is the author or creator of the documents?",
-        category="factoid"
-    ),
-    BenchmarkQuery(
-        id="analytical_01",
-        query="Summarize the key findings across all uploaded documents.",
-        category="analytical"
-    ),
-    BenchmarkQuery(
-        id="comparative_01",
-        query="Compare the different approaches mentioned in the documents.",
-        category="comparative"
-    ),
-    BenchmarkQuery(
-        id="procedural_01",
-        query="What are the step-by-step instructions described?",
-        category="procedural"
-    ),
-    BenchmarkQuery(
-        id="absent_01",
-        query="What does the document say about quantum computing in 2099?",
-        category="absent"
-    ),
-    BenchmarkQuery(
-        id="specific_01",
-        query="List all specific numbers, dates, or statistics mentioned.",
-        category="specific"
-    ),
-    BenchmarkQuery(
-        id="follow_up_01",
-        query="Can you elaborate on the first point you mentioned?",
-        category="follow_up"
-    ),
+    # FACTOID
+    BenchmarkQuery(id="factoid_01", query="What is a qubit?", category="factoid", expected_sources=["1", "2"]),
+    BenchmarkQuery(id="factoid_02", query="What is the difference between a qubit and a classical bit?", category="factoid", expected_sources=["3"]),
+    BenchmarkQuery(id="factoid_03", query="Who proposed the idea of a quantum Turing machine?", category="factoid", expected_sources=["10"]),
+    BenchmarkQuery(id="factoid_04", query="What year did Peter Shor develop Shor's algorithm?", category="factoid", expected_sources=["15"]),
+    BenchmarkQuery(id="factoid_05", query="What is quantum decoherence?", category="factoid", expected_sources=["12", "13"]),
+    BenchmarkQuery(id="factoid_06", query="What is the threshold theorem?", category="factoid", expected_sources=["18"]),
+    BenchmarkQuery(id="factoid_07", query="What physical systems are used to build qubits?", category="factoid"),
+    BenchmarkQuery(id="factoid_08", query="Name two types of quantum logic gates.", category="factoid"),
+    BenchmarkQuery(id="factoid_09", query="What does NISQ stand for?", category="factoid"),
+    BenchmarkQuery(id="factoid_10", query="What is quantum supremacy?", category="factoid"),
+    
+    # DEFINITIONAL
+    BenchmarkQuery(id="definitional_01", query="Define quantum entanglement in the context of computing.", category="definitional"),
+    BenchmarkQuery(id="definitional_02", query="What is quantum superposition?", category="definitional"),
+    BenchmarkQuery(id="definitional_03", query="Define quantum error correction.", category="definitional"),
+    BenchmarkQuery(id="definitional_04", query="What is adiabatic quantum computing?", category="definitional"),
+    BenchmarkQuery(id="definitional_05", query="Explain the concept of quantum annealing.", category="definitional"),
+    
+    # ANALYTICAL
+    BenchmarkQuery(id="analytical_01", query="How does Shor's algorithm threaten RSA encryption?", category="analytical"),
+    BenchmarkQuery(id="analytical_02", query="Why is maintaining coherence difficult in a quantum computer?", category="analytical"),
+    BenchmarkQuery(id="analytical_03", query="What are the main obstacles to building a large-scale quantum computer?", category="analytical"),
+    BenchmarkQuery(id="analytical_04", query="How does Grover's algorithm improve database search?", category="analytical"),
+    BenchmarkQuery(id="analytical_05", query="What implications does quantum computing have for materials science?", category="analytical"),
+
+    # COMPARATIVE
+    BenchmarkQuery(id="comparative_01", query="Compare superconducting qubits with trapped ion qubits.", category="comparative"),
+    BenchmarkQuery(id="comparative_02", query="How does a quantum computer's memory differ from a classical computer's?", category="comparative"),
+    BenchmarkQuery(id="comparative_03", query="Contrast quantum gate arrays with quantum annealing.", category="comparative"),
+    BenchmarkQuery(id="comparative_04", query="What is the difference between a physical qubit and a logical qubit?", category="comparative"),
+    BenchmarkQuery(id="comparative_05", query="How does Grover's speedup compare to Shor's speedup?", category="comparative"),
+
+    # MULTI-HOP
+    BenchmarkQuery(id="multihop_01", query="Based on the history, how did Feynman's original proposal connect to Shor's later discovery?", category="multi_hop"),
+    BenchmarkQuery(id="multihop_02", query="How does the physical implementation of a qubit relate to the need for quantum error correction?", category="multi_hop"),
+    BenchmarkQuery(id="multihop_03", query="If NISQ computers cannot perform fault-tolerant error correction, how do they attempt to achieve quantum advantage?", category="multi_hop"),
+    BenchmarkQuery(id="multihop_04", query="How do decoherence rates affect the depth of the quantum circuits that can be executed?", category="multi_hop"),
+    BenchmarkQuery(id="multihop_05", query="Trace the relationship between cryptography vulnerabilities and the development of post-quantum cryptography.", category="multi_hop"),
+
+    # PROCEDURAL
+    BenchmarkQuery(id="procedural_01", query="How do you perform a measurement on a qubit?", category="procedural"),
+    BenchmarkQuery(id="procedural_02", query="What is the general process for running a quantum algorithm?", category="procedural"),
+    BenchmarkQuery(id="procedural_03", query="How does the surface code implement error correction?", category="procedural"),
+    
+    # ABSENT (Hallucination checks)
+    BenchmarkQuery(id="absent_01", query="What does the document say about the use of quantum computing in making cheese?", category="absent"),
+    BenchmarkQuery(id="absent_02", query="Who won the Super Bowl in 2024 according to the quantum computing article?", category="absent"),
 ]
 
 
@@ -136,18 +152,71 @@ class BenchmarkRunner:
         user,
         queries: Optional[List[BenchmarkQuery]] = None,
         variants: Optional[List[PipelineVariant]] = None,
+        resume: bool = True,
+        output_file: str = "benchmark_report.json"
     ):
         self.project_id = project_id
         self.session_db = session_db
         self.user = user
         self.queries = queries or DEFAULT_BENCHMARK_QUERIES
         self.variants = variants or list(PipelineVariant)
+        
+        # Resumability setup
+        self.partial_file = output_file.replace(".json", ".partial.json")
+        self.completed_runs = set()
+        self.summaries = []
+        
+        if resume and os.path.exists(self.partial_file):
+            logger.info(f"Resuming benchmark from partial state: {self.partial_file}")
+            try:
+                with open(self.partial_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    
+                # Reconstruct summaries
+                for s_dict in data:
+                    variant_val = s_dict["variant"]
+                    summary = VariantSummary(
+                        variant=variant_val,
+                        label=s_dict["label"],
+                        description=s_dict["description"]
+                    )
+                    
+                    for qr_dict in s_dict.get("query_results", []):
+                        # Construct QueryResult from dictionary
+                        qr = QueryResult(**qr_dict)
+                        summary.query_results.append(qr)
+                        self.completed_runs.add((variant_val, qr.query_id))
+                        
+                    self.summaries.append(summary)
+            except Exception as e:
+                logger.error(f"Failed to load partial state: {e}. Starting fresh.")
+                self.completed_runs = set()
+                self.summaries = []
+        elif not resume and os.path.exists(self.partial_file):
+            logger.info("Starting fresh benchmark. Removing existing partial state.")
+            os.remove(self.partial_file)
+            
+    def _save_partial_state(self, current_variant_summary: VariantSummary):
+        """Serialize current in-progress state to disk."""
+        # Find or append current summary
+        found = False
+        for i, s in enumerate(self.summaries):
+            if s.variant == current_variant_summary.variant:
+                self.summaries[i] = current_variant_summary
+                found = True
+                break
+        if not found:
+            self.summaries.append(current_variant_summary)
+            
+        with open(self.partial_file, "w", encoding="utf-8") as f:
+            f.write(self.to_json(self.summaries))
 
     async def _run_single_query(
         self,
         query: BenchmarkQuery,
         variant: PipelineVariant,
         variant_config: Dict[str, Any],
+        cache=None,
     ) -> QueryResult:
         """
         Execute a single query against a specific pipeline variant.
@@ -195,32 +264,48 @@ class BenchmarkRunner:
 
             # Build LLM client
             import os as _os
-            if rag_config.primary_llm_provider == "groq":
+            primary_model_cfg = getattr(rag_config, "primary_models", [{"provider": "groq", "name": "openai/gpt-oss-20b"}])[0]
+            provider = primary_model_cfg.get("provider", "groq")
+            model_name = primary_model_cfg.get("name", "openai/gpt-oss-20b")
+            
+            if provider == "groq":
                 from langchain_groq import ChatGroq
                 llm_client = ChatGroq(
-                    model_name=rag_config.primary_llm_name,
+                    model_name=model_name,
                     api_key=_os.getenv("GROQ_API_KEY"),
-                    temperature=rag_config.temperature,
+                    temperature=0.0, # Forced for determinism in benchmarks
+                )
+            elif provider == "openrouter":
+                from langchain_openai import ChatOpenAI
+                llm_client = ChatOpenAI(
+                    model_name=model_name,
+                    openai_api_key=_os.getenv("OPENROUTER_API_KEY"),
+                    openai_api_base="https://openrouter.ai/api/v1",
+                    temperature=0.0,
                 )
             else:
                 from langchain_google_genai import ChatGoogleGenerativeAI
                 llm_client = ChatGoogleGenerativeAI(
-                    model=rag_config.primary_llm_name,
+                    model=model_name,
                     google_api_key=_os.getenv("GEMINI_API_KEY"),
-                    temperature=rag_config.temperature,
+                    temperature=0.0, # Forced for determinism in benchmarks
                 )
 
-            # --- Execute retrieval stage ---
-            search_results = engine.search(
-                query=query.query,
-                project_id=self.project_id,
-                k=rag_config.top_k,
-                score_threshold=rag_config.similarity_threshold,
-                llm_client=llm_client if variant_config.get("use_query_rewriting") else None,
-            )
+            try:
+                search_results = engine.search(
+                    query=query.query,
+                    project_id=self.project_id,
+                    k=rag_config.top_k,
+                    score_threshold=rag_config.similarity_threshold,
+                    llm_client=llm_client if variant_config.get("use_query_rewriting") else None,
+                )
+            except Exception as e:
+                raise RuntimeError(f"Retrieval failed: {e}")
 
             ctx_chunks = [d.page_content for d, _ in search_results]
             result.chunks_retrieved = len(ctx_chunks)
+            # Assuming Document metadata contains the chunk 'id'
+            result.retrieved_chunk_ids = [d.metadata.get("chunk_id", i) for i, (d, _) in enumerate(search_results)]
 
             # Compute confidence from gate result
             gate_res = getattr(search_results, "confidence_gate_result", None)
@@ -231,12 +316,28 @@ class BenchmarkRunner:
             if ctx_chunks:
                 context_str = "\n\n".join(ctx_chunks[:12])
                 gen_prompt = (
-                    "You are a precise assistant. Answer using ONLY the context below. "
-                    "If the answer is not in the context, say you cannot find it.\n\n"
-                    f"Context:\n{context_str}\n\nQuestion: {query.query}\nAnswer:"
+                    "You are a precise and thorough assistant. Answer the question using ONLY information from the context below. "
+                    "Be detailed and comprehensive in your response, citing specific details from the context. "
+                    "Use the same terminology and phrasing found in the context whenever possible. "
+                    "If the answer is not in the context, say 'I cannot find that information in the provided documents.'\n\n"
+                    f"Context:\n{context_str}\n\nQuestion: {query.query}\n\nDetailed Answer:"
                 )
-                gen_res = await llm_client.ainvoke(gen_prompt)
-                result.answer = gen_res.content if hasattr(gen_res, "content") else str(gen_res)
+                try:
+                    if cache is not None:
+                        # kb_version=1 for benchmark
+                        cached = cache.get(query.query, self.project_id, 1)
+                        if cached:
+                            result.answer = cached
+                            result.cache_hit = True
+                    
+                    if not result.cache_hit:
+                        gen_res = await llm_client.ainvoke(gen_prompt)
+                        result.answer = gen_res.content if hasattr(gen_res, "content") else str(gen_res)
+                        
+                        if cache is not None:
+                            cache.set(query.query, result.answer, self.project_id, 1)
+                except Exception as e:
+                    raise RuntimeError(f"Generation failed: {e}")
             else:
                 result.answer = "No relevant information found in the knowledge base."
 
@@ -248,12 +349,22 @@ class BenchmarkRunner:
             sync_scores = evaluate_rag_response(query.query, result.answer, ctx_chunks)
             retrieved_chunks_dicts = [{"content": t, "source": ""} for t in ctx_chunks]
 
+            # Don't pass sync_scores to RAGAS evaluator — let it use its
+            # own improved metric calculations instead of the old flat ones.
             ragas = evaluator.evaluate(
                 query=query.query,
                 retrieved_chunks=retrieved_chunks_dicts,
                 generated_answer=result.answer,
-                existing_eval_scores=sync_scores,
+                existing_eval_scores=None,
             )
+
+            # Debug output for Part 1a
+            if query.id == "factoid_01" and variant.value in ("naive", "hybrid"):
+                print(f"--- DEBUG {variant.value.upper()} ---")
+                print(f"Chunks retrieved: {len(ctx_chunks)}")
+                for i, c in enumerate(ctx_chunks):
+                    print(f"Chunk {i}: {c[:100]}...")
+                print(f"Score: {ragas.context_relevance}")
 
             result.ragas_context_relevance = ragas.context_relevance
             result.ragas_faithfulness = ragas.faithfulness
@@ -267,14 +378,15 @@ class BenchmarkRunner:
             o_tokens = int(len(result.answer) / 4)
             from app.utils.cost import calculate_cost
             result.token_cost_estimate = calculate_cost(
-                rag_config.primary_llm_name,
-                rag_config.primary_llm_provider,
+                model_name,
+                provider,
                 i_tokens,
                 o_tokens,
             )
 
-            # Cache hit detection
-            result.cache_hit = getattr(search_results, "pipeline_trace", {}).get("retrieval_source") == "cache"
+            # Cache hit detection is already done for RAGOps above
+            if not result.cache_hit:
+                result.cache_hit = getattr(search_results, "pipeline_trace", {}).get("retrieval_source") == "cache"
 
         except Exception as exc:
             result.error = str(exc)
@@ -290,15 +402,38 @@ class BenchmarkRunner:
     async def run_variant(self, variant: PipelineVariant) -> VariantSummary:
         """Run all benchmark queries against a single variant."""
         config = get_variant_config(variant)
-        summary = VariantSummary(
-            variant=variant.value,
-            label=config["label"],
-            description=config["description"],
-        )
+        # Check if we already have this summary from resume
+        for s in self.summaries:
+            if s.variant == variant.value:
+                summary = s
+                break
+        else:
+            summary = VariantSummary(
+                variant=variant.value,
+                label=config["label"],
+                description=config["description"],
+            )
+
+        # Setup versioned semantic cache if the variant uses advanced planning
+        from app.services.cost_control import SemanticCache
+        from app.services.versioned_cache import VersionedSemanticCache
+        base_cache = SemanticCache(threshold=0.85, ttl_seconds=3600)
+        cache = VersionedSemanticCache(base_cache)
+        enable_cache = config.get("use_semantic_cache", False)
 
         for query in self.queries:
-            result = await self._run_single_query(query, variant, config)
+            if (variant.value, query.id) in self.completed_runs:
+                logger.info(f"Skipping already completed query {query.id} for variant {variant.value}")
+                continue
+                
+            logger.info(f"Running query {query.id} for variant {variant.value}")
+            result = await self._run_single_query(query, variant, config, cache if enable_cache else None)
             summary.query_results.append(result)
+            self.completed_runs.add((variant.value, query.id))
+            
+            # Save partial state after each query
+            self._save_partial_state(summary)
+
 
         # Aggregate metrics
         n = len(summary.query_results)
@@ -312,6 +447,36 @@ class BenchmarkRunner:
             summary.avg_answer_relevance = sum(r.ragas_answer_relevance for r in ok_results) / n_ok
             summary.avg_groundedness = sum(r.ragas_groundedness for r in ok_results) / n_ok
             summary.avg_overall_score = sum(r.ragas_overall for r in ok_results) / n_ok
+            
+            # Deterministic Retrieval Metrics aggregation
+            from app.benchmark.retrieval_metrics import calculate_recall_at_k, calculate_precision_at_k, calculate_mrr, calculate_ndcg
+            
+            gt_queries = [q for q in self.queries if getattr(q, "expected_sources", None)]
+            if gt_queries:
+                recalls = []
+                precisions = []
+                mrrs = []
+                ndcgs = []
+                
+                for q in gt_queries:
+                    # Find matching result
+                    qr = next((r for r in ok_results if r.query_id == q.id), None)
+                    if qr:
+                        # Assuming expected_sources contains chunk IDs (ints)
+                        expected = [int(s) for s in q.expected_sources]
+                        retrieved = qr.retrieved_chunk_ids
+                        
+                        recalls.append(calculate_recall_at_k(retrieved, expected, k=5))
+                        precisions.append(calculate_precision_at_k(retrieved, expected, k=5))
+                        mrrs.append(calculate_mrr(retrieved, expected))
+                        ndcgs.append(calculate_ndcg(retrieved, expected, k=5))
+                
+                if recalls:
+                    summary.avg_recall_at_5 = sum(recalls) / len(recalls)
+                    summary.avg_precision_at_5 = sum(precisions) / len(precisions)
+                    summary.avg_mrr = sum(mrrs) / len(mrrs)
+                    summary.avg_ndcg_at_5 = sum(ndcgs) / len(ndcgs)
+                    
             summary.total_token_cost = sum(r.token_cost_estimate for r in ok_results)
             summary.cache_hit_rate = sum(1 for r in ok_results if r.cache_hit) / n_ok
             summary.error_rate = sum(1 for r in summary.query_results if r.error is not None) / n

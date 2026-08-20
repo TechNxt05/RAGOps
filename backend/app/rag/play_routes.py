@@ -15,7 +15,7 @@ class PlaygroundMessage(BaseModel):
 class PlaygroundRequest(BaseModel):
     messages: List[PlaygroundMessage]
     model_provider: str = "groq"
-    model_name: str = "llama-3.3-70b-versatile"
+    model_name: str = "llama3-70b-8192"
     temperature: float = 0.7
     max_tokens: Optional[int] = 1000
     system_prompt: Optional[str] = None

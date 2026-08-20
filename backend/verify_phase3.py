@@ -117,6 +117,21 @@ def verify_phase3():
     assert c_policy.action.value == "lookup"
     print(f"  ✅ UnifiedContextBuilder: Deduplicated {ctx_res.chunks_deduplicated} chunks; CachePolicyEngine action='{c_policy.action.value}'")
 
+    # 8. Benchmark Variance Check
+    print("\n[8/8] Verifying Benchmark Variance...")
+    report_path = os.path.join(_this_dir, "benchmark_report.json")
+    if os.path.exists(report_path):
+        import json
+        with open(report_path, "r", encoding="utf-8") as f:
+            report_data = json.load(f)
+        scores = [v["avg_overall_score"] for v in report_data]
+        if len(scores) > 1:
+            stdev = __import__("statistics").stdev(scores)
+            assert stdev > 0.0, "Benchmark produced flat identical scores across variants (stddev=0.0)"
+            print(f"  ✅ Benchmark Variance: Leaderboard scores are differentiated (stddev={stdev:.4f})")
+    else:
+        print("  ⚠️ Benchmark report not found, skipping variance check. Run run_benchmark.py first.")
+
     print("\n" + "=" * 70)
     print("   🎉 ALL RAGOps PHASE 3 VERIFICATION CHECKS PASSED CLEANLY!")
     print("=" * 70)

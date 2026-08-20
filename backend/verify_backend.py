@@ -92,7 +92,7 @@ def verify():
                     "content": "What is hybrid search?",
                     "project_id": project_id,
                     "model_provider": "groq",
-                    "model_name": "llama-3.3-70b-versatile"
+                    "model_name": "llama3-70b-8192"
                 },
                 headers=admin_headers
             )

@@ -43,7 +43,7 @@ class RAGEngine:
         self.session = session
         # Default fallback embeddings if no project config is found
         self._default_embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001",
+            model="models/gemini-embedding-2",
             google_api_key=os.getenv("GEMINI_API_KEY"),
         )
 
@@ -58,7 +58,7 @@ class RAGEngine:
         
         # Default to Google
         return GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001",
+            model="models/gemini-embedding-2",
             google_api_key=os.getenv("GEMINI_API_KEY"),
         )
 
@@ -639,7 +639,7 @@ class RAGEngine:
 
 
         except Exception as e:
-            logging.error(f"Error in RAGEngine.search pipeline: {e}")
+            logging.error(f"Error in RAGEngine.search pipeline: {e}", exc_info=True)
             tracer.fail_pipeline(str(e))
             empty_res = SearchResultList()
             empty_res.pipeline_trace = tracer.to_dict()

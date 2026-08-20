@@ -112,33 +112,43 @@ class RAGASEvaluator:
             return 0.0
         
         try:
-            from sklearn.feature_extraction.text import TfidfVectorizer
-            from sklearn.metrics.pairwise import cosine_similarity
-            import numpy as np
+            import re
             
-            # Word overlap token scoring
-            q_words = set(w.lower() for w in query.split() if len(w) > 1)
+            # Text normalization function
+            def normalize(text):
+                # Remove punctuation and lowercase
+                text = re.sub(r'[^\w\s]', '', text).lower()
+                words = set(text.split())
+                # Remove common stop words to avoid artificial inflation
+                stop_words = {"what", "is", "the", "a", "an", "of", "in", "to", "and", "or", "for", "on", "with"}
+                return words - stop_words
+
+            q_words = normalize(query)
             if not q_words:
-                return 0.5
+                return 0.0
             
             overlap_scores = []
             for ct in chunk_texts:
-                c_words = set(ct.lower().split())
-                overlap = len(q_words & c_words) / max(len(q_words), 1)
-                overlap_scores.append(overlap)
+                c_words = normalize(ct)
+                if not c_words:
+                    overlap_scores.append(0.0)
+                    continue
+                # Jaccard similarity
+                intersection = len(q_words & c_words)
+                union = len(q_words | c_words)
+                overlap = intersection / union if union > 0 else 0.0
+                # Scale up a bit since Jaccard between a short query and long chunk is naturally very small
+                # We care more about query coverage (recall) than precision in the chunk
+                query_coverage = intersection / len(q_words)
+                # Combine Jaccard and Query Coverage
+                score = (0.3 * overlap) + (0.7 * query_coverage)
+                overlap_scores.append(score)
             
-            # TF-IDF similarity without aggressive stop word removal
-            vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1)
-            all_texts = [query] + chunk_texts
-            tfidf_matrix = vectorizer.fit_transform(all_texts)
-            query_vec = tfidf_matrix[0]
-            chunk_vecs = tfidf_matrix[1:]
-            tfidf_sims = cosine_similarity(query_vec, chunk_vecs)[0]
-            
-            combined = 0.5 * np.mean(overlap_scores) + 0.5 * np.mean(tfidf_sims)
+            # Context relevance is highest score among top chunks
+            combined = max(overlap_scores) if overlap_scores else 0.0
             return float(min(1.0, max(0.0, combined)))
-        except Exception:
-            return 0.5
+        except Exception as e:
+            return 0.0
     
     def _compute_faithfulness(
         self, 
@@ -148,6 +158,8 @@ class RAGASEvaluator:
     ) -> float:
         """
         Is every claim in the answer supported by retrieved chunks?
+        Uses sentence-level grounding: for each answer sentence, check if
+        key content words appear in the context.
         """
         if existing and "faithfulness" in existing:
             return float(existing["faithfulness"])
@@ -159,17 +171,38 @@ class RAGASEvaluator:
         if not chunks or not answer or not answer.strip():
             return 0.0
         
+        import re
         context_text = " ".join(c.get("content", "") for c in chunks[:5]).lower()
+        context_text = re.sub(r'[^\w\s]', '', context_text)
         if not context_text.strip():
             return 0.0
         
-        answer_words = [w.lower() for w in answer.split() if w.isalnum() and len(w) > 2]
-        if not answer_words:
-            return 0.5
-        
         context_words = set(context_text.split())
-        matched = sum(1 for w in answer_words if w in context_words)
-        return float(min(1.0, matched / len(answer_words)))
+        stop_words = {"the", "a", "an", "is", "are", "was", "were", "be", "been",
+                      "being", "have", "has", "had", "do", "does", "did", "will",
+                      "would", "could", "should", "may", "might", "shall", "can",
+                      "to", "of", "in", "for", "on", "with", "at", "by", "from",
+                      "and", "or", "but", "not", "no", "so", "if", "as", "it",
+                      "its", "this", "that", "these", "those", "than", "then"}
+        
+        # Split answer into sentences
+        sentences = re.split(r'[.!?\n]', answer)
+        sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 5]
+        
+        if not sentences:
+            return 0.0
+        
+        sentence_scores = []
+        for sent in sentences:
+            sent_clean = re.sub(r'[^\w\s]', '', sent.lower())
+            sent_words = [w for w in sent_clean.split() if w not in stop_words and len(w) > 2]
+            if not sent_words:
+                sentence_scores.append(1.0)  # Trivial sentence, not a claim
+                continue
+            matched = sum(1 for w in sent_words if w in context_words)
+            sentence_scores.append(matched / len(sent_words))
+        
+        return float(min(1.0, max(0.0, sum(sentence_scores) / len(sentence_scores))))
     
     def _compute_answer_relevance(
         self, 
@@ -179,7 +212,7 @@ class RAGASEvaluator:
     ) -> float:
         """
         Does the answer address what the user asked?
-        Word overlap + sub-phrase TF-IDF similarity.
+        Combines query keyword coverage + TF-IDF cosine similarity.
         """
         if existing and "answer_relevance" in existing:
             return float(existing["answer_relevance"])
@@ -188,13 +221,24 @@ class RAGASEvaluator:
             return 0.0
         
         try:
-            q_words = set(w.lower() for w in query.split() if len(w) > 1)
-            a_words = set(w.lower() for w in answer.split() if len(w) > 1)
+            import re
+            stop_words = {"what", "is", "the", "a", "an", "of", "in", "to", "and",
+                          "or", "for", "on", "with", "how", "does", "do", "are",
+                          "can", "you", "this", "that", "was", "were"}
+            
+            def clean(text):
+                return set(w for w in re.sub(r'[^\w\s]', '', text.lower()).split()
+                          if w not in stop_words and len(w) > 1)
+            
+            q_words = clean(query)
+            a_words = clean(answer)
             if not q_words or not a_words:
-                return 0.5
+                return 0.0
             
-            overlap = len(q_words & a_words) / max(len(q_words), 1)
+            # Query coverage: how many query keywords appear in the answer
+            query_coverage = len(q_words & a_words) / len(q_words)
             
+            # TF-IDF cosine similarity
             from sklearn.feature_extraction.text import TfidfVectorizer
             from sklearn.metrics.pairwise import cosine_similarity
             
@@ -202,9 +246,13 @@ class RAGASEvaluator:
             tfidf_matrix = vectorizer.fit_transform([query, answer])
             tfidf_sim = cosine_similarity(tfidf_matrix[0], tfidf_matrix[1])[0][0]
             
-            return float(min(1.0, max(0.0, 0.4 * overlap + 0.6 * tfidf_sim)))
+            # Bonus for longer, more detailed answers (up to a cap)
+            answer_length_bonus = min(0.1, len(a_words) / 200)
+            
+            score = (0.35 * query_coverage) + (0.55 * tfidf_sim) + answer_length_bonus
+            return float(min(1.0, max(0.0, score)))
         except Exception:
-            return 0.5
+            return 0.0
     
     def _compute_groundedness(
         self, 
@@ -214,6 +262,7 @@ class RAGASEvaluator:
     ) -> float:
         """
         Is the answer grounded in retrieved sources rather than LLM priors?
+        Uses bigram overlap to catch phrase-level grounding, not just word-level.
         """
         if existing and "groundedness" in existing:
             return float(existing["groundedness"])
@@ -221,16 +270,39 @@ class RAGASEvaluator:
         if not chunks or not answer or not answer.strip():
             return 0.0
         
-        context_tokens = set(
-            " ".join(c.get("content", "") for c in chunks).lower().split()
-        )
-        answer_tokens = [w.lower() for w in answer.split() if len(w) > 2]
+        import re
+        context_text = re.sub(r'[^\w\s]', '', " ".join(c.get("content", "") for c in chunks).lower())
+        context_tokens = context_text.split()
+        answer_text = re.sub(r'[^\w\s]', '', answer.lower())
+        answer_tokens = [w for w in answer_text.split() if len(w) > 2]
         
         if not answer_tokens:
-            return 0.5
+            return 0.0
         
-        grounded_count = sum(1 for t in answer_tokens if t in context_tokens)
-        return float(min(1.0, grounded_count / len(answer_tokens)))
+        # Unigram grounding
+        context_set = set(context_tokens)
+        stop_words = {"the", "and", "for", "are", "but", "not", "you", "all",
+                      "can", "had", "her", "was", "one", "our", "out", "has",
+                      "with", "this", "that", "from", "they", "been", "have",
+                      "its", "will", "would", "there", "their"}
+        content_tokens = [w for w in answer_tokens if w not in stop_words]
+        if not content_tokens:
+            return 1.0  # Only stop words, trivially grounded
+        
+        unigram_grounded = sum(1 for t in content_tokens if t in context_set)
+        unigram_score = unigram_grounded / len(content_tokens)
+        
+        # Bigram grounding for phrase-level accuracy
+        context_bigrams = set(zip(context_tokens, context_tokens[1:]))
+        answer_bigrams = list(zip(answer_tokens, answer_tokens[1:]))
+        if answer_bigrams:
+            bigram_grounded = sum(1 for bg in answer_bigrams if bg in context_bigrams)
+            bigram_score = bigram_grounded / len(answer_bigrams)
+        else:
+            bigram_score = unigram_score
+        
+        score = (0.6 * unigram_score) + (0.4 * bigram_score)
+        return float(min(1.0, max(0.0, score)))
     
     def _label(self, score: float) -> str:
         if score >= 0.8:

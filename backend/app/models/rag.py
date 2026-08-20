@@ -15,11 +15,19 @@ class RAGConfig(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     project_id: Optional[int] = Field(default=None, foreign_key="project.id")
 
-    # Model orchestration (defaults match chat UI)
-    primary_llm_provider: str = Field(default="groq")
-    primary_llm_name: str = Field(default="llama3-70b-8192")
-    fallback_llm_provider: str = Field(default="google")
-    fallback_llm_name: str = Field(default="gemini-1.5-flash")
+    # Model orchestration (ordered fallback lists)
+    primary_models: List[dict] = Field(
+        default=[{"provider": "groq", "name": "openai/gpt-oss-20b"}],
+        sa_column=Column(JSON)
+    )
+    fallback_models: List[dict] = Field(
+        default=[
+            {"provider": "groq", "name": "llama3-8b-8192"},
+            {"provider": "openrouter", "name": "meta-llama/llama-3-8b-instruct:free"},
+            {"provider": "google", "name": "gemini-1.5-flash"}
+        ],
+        sa_column=Column(JSON)
+    )
     embedding_model: str = Field(default="google-embedding-001")
     
     # Text Splitter Config (Existing)

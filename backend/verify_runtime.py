@@ -70,7 +70,7 @@ def test_phase_a_runtime():
         retrieval_strategy="hybrid",
         retrieval_top_k=10,
         reranking=True,
-        model="groq/llama-3.3-70b-versatile",
+        model="groq/llama3-70b-8192",
         reasoning_effort="STANDARD"
     )
     plan_dict = plan.to_dict()

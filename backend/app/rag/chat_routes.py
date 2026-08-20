@@ -41,7 +41,7 @@ class ChatMessageRequest(BaseModel):
     session_id: Optional[int] = None
     temperature: float = 0.1
     model_provider: str = "groq"
-    model_name: str = "llama-3.3-70b-versatile"
+    model_name: str = "llama3-70b-8192"
     history_limit: int = 5
     project_context_limit: int = 2
     context_session_ids: List[int] = Field(default_factory=list)

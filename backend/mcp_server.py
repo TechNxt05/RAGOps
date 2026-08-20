@@ -52,7 +52,7 @@ async def query_knowledge_base(
     query: str,
     temperature: float = 0.1,
     model_provider: str = "groq",
-    model_name: str = "llama-3.3-70b-versatile",
+    model_name: str = "llama3-70b-8192",
 ) -> Dict[str, Any]:
     """
     Run a query through the full RAGOps end-to-end pipeline:

@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 venv/
 .env
+.env.example
 .venv
 env/
 *.log
@@ -26,3 +27,17 @@ postgres_data/
 
 # Local Only
 backend/ragops.db
+*.db-journal
+
+# Outputs and Benchmark Data
+*benchmark_report*.json
+*benchmark_*out*.txt
+backend/diff_output.txt
+backend/data/
+
+# Scratch Scripts
+scratch_test*.py
+check_failures.py
+
+# Data / FAISS Indices
+backend/faiss_index/
