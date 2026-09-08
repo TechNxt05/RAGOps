@@ -4,27 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-try:
-    import httpx
-    _orig_client_init = httpx.Client.__init__
-    def _patched_client_init(self, *args, **kwargs):
-        if "proxies" in kwargs:
-            p = kwargs.pop("proxies")
-            if p and "proxy" not in kwargs:
-                kwargs["proxy"] = p
-        return _orig_client_init(self, *args, **kwargs)
-    httpx.Client.__init__ = _patched_client_init
-
-    _orig_async_client_init = httpx.AsyncClient.__init__
-    def _patched_async_client_init(self, *args, **kwargs):
-        if "proxies" in kwargs:
-            p = kwargs.pop("proxies")
-            if p and "proxy" not in kwargs:
-                kwargs["proxy"] = p
-        return _orig_async_client_init(self, *args, **kwargs)
-    httpx.AsyncClient.__init__ = _patched_async_client_init
-except Exception:
-    pass
+import app.utils.httpx_patch
 
 app = FastAPI(title="RAGOps API", version="1.0.0")
 
@@ -48,7 +28,7 @@ app.add_middleware(
 from app.db import init_db
 from app.auth import routes as auth_routes
 from app.rag import config_routes, ingest_routes, chat_routes, project_routes, inspector_routes, play_routes, analytics_routes
-from app.routes import api_analytics, query
+from app.routes import api_analytics, query, benchmark_routes
 
 @app.on_event("startup")
 def on_startup():
@@ -68,6 +48,7 @@ app.include_router(inspector_routes.router, prefix="/rag")
 app.include_router(play_routes.router)
 app.include_router(analytics_routes.router)
 app.include_router(api_analytics.router)
+app.include_router(benchmark_routes.router)
 
 @app.get("/health")
 def health():

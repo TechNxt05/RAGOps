@@ -22,14 +22,16 @@ Original question: {query}
 Return ONLY the queries, one per line, no numbering, no explanation."""
         
         try:
+            from app.utils.llm_response import extract_text
             if hasattr(self.llm, "invoke"):
-                response = self.llm.invoke(prompt).content
+                raw_res = self.llm.invoke(prompt)
+                response = extract_text(getattr(raw_res, "content", raw_res))
             elif hasattr(self.llm, "predict"):
-                response = self.llm.predict(prompt)
+                response = extract_text(self.llm.predict(prompt))
             elif hasattr(self.llm, "generate"):
-                response = self.llm.generate(prompt)
+                response = extract_text(self.llm.generate(prompt))
             else:
-                response = str(self.llm(prompt))
+                response = extract_text(str(self.llm(prompt)))
         except Exception as e:
             print(f"Error generating query variants: {e}")
             return [query]
@@ -110,7 +112,9 @@ Return ONLY the queries, one per line, no numbering, no explanation."""
             return {
                 "chunks": chunks,
                 "queries_used": [query],
-                "fusion_method": "single_query"
+                "fusion_method": "single_query",
+                "query_count": 1,
+                "total_candidates": len(chunks)
             }
         
         # Generate variants

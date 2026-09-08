@@ -442,4 +442,139 @@ export const getHistory = async (sessionId: number) => {
   return response.data;
 };
 
+// ==========================================
+// AutoRAGBench Evaluation Studio Types & API
+// ==========================================
+
+export interface ModelProfile {
+  id: string;
+  name: string;
+  provider: string;
+  model_name: string;
+  description: string;
+  context_window: number;
+  cost_per_1m_input: number;
+  cost_per_1m_output: number;
+  is_available: boolean;
+  badge: string;
+  recommended_for_benchmark: boolean;
+}
+
+export interface PipelineVariantInfo {
+  name: string;
+  label: string;
+  description: string;
+}
+
+export interface BenchmarkDatasetInfo {
+  id: string;
+  name: string;
+  description: string;
+  query_count: number;
+  recommended: boolean;
+}
+
+export interface BenchmarkStartRequest {
+  project_id: number;
+  model_profile_id: string;
+  variants: string[];
+  dataset_type: string;
+  custom_queries?: Array<{ id?: string; query: string; category?: string }>;
+  delay_ms?: number;
+  resume?: boolean;
+}
+
+export interface BenchmarkStatusResponse {
+  job_id: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  model_name: string;
+  model_provider: string;
+  progress_pct: number;
+  completed_queries: number;
+  total_queries: number;
+  current_variant: string;
+  current_query: string;
+  elapsed_seconds: number;
+  live_events: Array<{
+    event: string;
+    variant: string;
+    variant_label: string;
+    query_id: string;
+    query_text: string;
+    category: string;
+    ragas_overall: number;
+    latency_ms: number;
+    token_cost: number;
+    error?: string | null;
+  }>;
+  error?: string | null;
+}
+
+export interface BenchmarkVariantSummary {
+  variant: string;
+  label: string;
+  description: string;
+  total_queries: number;
+  avg_latency_ms: number;
+  avg_context_relevance: number;
+  avg_faithfulness: number;
+  avg_answer_relevance: number;
+  avg_groundedness: number;
+  avg_overall_score: number;
+  avg_recall_at_5: number;
+  avg_precision_at_5: number;
+  avg_mrr: number;
+  avg_ndcg_at_5: number;
+  total_token_cost: number;
+  cache_hit_rate: number;
+  error_rate: number;
+  ci_lower_95?: number;
+  ci_upper_95?: number;
+}
+
+export interface BenchmarkResultsResponse {
+  job_id: string;
+  status: string;
+  model_name: string;
+  model_provider: string;
+  elapsed_seconds: number;
+  summaries: BenchmarkVariantSummary[];
+  output_file?: string;
+}
+
+export const getBenchmarkModels = async (): Promise<ModelProfile[]> => {
+  const res = await api.get<{ models: ModelProfile[] }>('/api/benchmark/models');
+  return res.data.models;
+};
+
+export const getBenchmarkVariants = async (): Promise<PipelineVariantInfo[]> => {
+  const res = await api.get<{ variants: PipelineVariantInfo[] }>('/api/benchmark/variants');
+  return res.data.variants;
+};
+
+export const getBenchmarkDatasets = async (): Promise<BenchmarkDatasetInfo[]> => {
+  const res = await api.get<{ datasets: BenchmarkDatasetInfo[] }>('/api/benchmark/datasets');
+  return res.data.datasets;
+};
+
+export const startBenchmark = async (req: BenchmarkStartRequest): Promise<{ job_id: string; status: string; message: string }> => {
+  const res = await api.post('/api/benchmark/start', req);
+  return res.data;
+};
+
+export const getBenchmarkStatus = async (jobId: string): Promise<BenchmarkStatusResponse> => {
+  const res = await api.get<BenchmarkStatusResponse>(`/api/benchmark/status/${jobId}`);
+  return res.data;
+};
+
+export const getBenchmarkResults = async (jobId: string): Promise<BenchmarkResultsResponse> => {
+  const res = await api.get<BenchmarkResultsResponse>(`/api/benchmark/results/${jobId}`);
+  return res.data;
+};
+
+export const cancelBenchmark = async (jobId: string) => {
+  const res = await api.post(`/api/benchmark/cancel/${jobId}`);
+  return res.data;
+};
+
 export default api;

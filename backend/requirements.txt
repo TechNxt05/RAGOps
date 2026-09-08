@@ -27,3 +27,5 @@ FlagEmbedding==1.2.9
 langgraph==0.2.76
 langchain-anthropic==0.1.23
 langchain-openai==0.1.25
+mcp
+

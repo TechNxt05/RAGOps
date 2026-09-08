@@ -5,8 +5,8 @@ def calculate_cost(model_name: str, provider: str, input_tokens: int, output_tok
     """
     price_map = {
         "google": {
-            "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
-            "gemini-1.5-pro": {"input": 3.50, "output": 10.50},
+            "gemini-2.5-flash": {"input": 0.075, "output": 0.30},
+            "gemini-2.5-pro": {"input": 3.50, "output": 10.50},
         },
         "groq": {
             "llama3-70b-8192": {"input": 0.59, "output": 0.79}, 

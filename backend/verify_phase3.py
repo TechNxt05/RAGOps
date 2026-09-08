@@ -102,7 +102,7 @@ def verify_phase3():
     assert g_res["nodes_created"] > 0
     search_res = graph_rag_service.search_structural_graph("AdaptiveRetrievalRouter")
     assert len(search_res) > 0
-    print(f"  ✅ GraphRAG Stage 1 & Stage 2: Created {g_res['nodes_created']} nodes with entity provenance and neighbor traversal")
+    print(f"  ✅ GraphRAG Stage 1: Created {g_res['nodes_created']} nodes with entity provenance and neighbor traversal")
 
     # 7. UnifiedContextBuilder & CachePolicyEngine
     print("\n[7/7] Verifying UnifiedContextBuilder & CachePolicyEngine...")

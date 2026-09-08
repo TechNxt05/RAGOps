@@ -16,7 +16,8 @@ from app.services.rrf_service import hybrid_search_merge
 from app.services.context_pruner import context_pruner
 from app.services.reranker_service import reranker_service
 
-VECTOR_STORE_PATH = "faiss_index"
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+VECTOR_STORE_PATH = os.path.join(BACKEND_DIR, "faiss_index")
 
 
 class SearchResultList(list):
@@ -41,26 +42,22 @@ class SearchResultList(list):
 class RAGEngine:
     def __init__(self, session: Session):
         self.session = session
-        # Default fallback embeddings if no project config is found
-        self._default_embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/gemini-embedding-2",
-            google_api_key=os.getenv("GEMINI_API_KEY"),
-        )
+        # Default local embeddings for fast, zero-rate-limit indexing
+        self._default_embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
     def _get_embeddings(self, config: Optional[RAGConfig] = None):
-        """Load embeddings based on config. Defaults to Google embedding-001."""
+        """Load embeddings based on config. Defaults to all-MiniLM-L6-v2."""
         if not config or not config.embedding_model:
             return self._default_embeddings
 
-        if "huggingface" in config.embedding_model.lower() or "minilm" in config.embedding_model.lower():
-            # Use local HuggingFace embeddings (no API cost)
-            return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        if "google" in config.embedding_model.lower() or "gemini" in config.embedding_model.lower():
+            return GoogleGenerativeAIEmbeddings(
+                model="models/gemini-embedding-2",
+                google_api_key=os.getenv("GEMINI_API_KEY"),
+            )
         
-        # Default to Google
-        return GoogleGenerativeAIEmbeddings(
-            model="models/gemini-embedding-2",
-            google_api_key=os.getenv("GEMINI_API_KEY"),
-        )
+        # Default to local HuggingFace embeddings
+        return self._default_embeddings
 
     def get_active_config(self, project_id: int) -> RAGConfig:
         config = self.session.exec(
@@ -402,17 +399,28 @@ class RAGEngine:
             
             # Setup default LLM client if not provided
             if llm_client is None:
-                if config.primary_llm_provider == "groq":
+                primary_provider = config.primary_models[0]["provider"] if config.primary_models else "google"
+                primary_name = config.primary_models[0]["name"] if config.primary_models else "gemini-3.1-flash-lite"
+                if primary_provider == "groq":
                     from langchain_groq import ChatGroq
                     llm_client = ChatGroq(
-                        model_name=config.primary_llm_name,
+                        model_name=primary_name,
                         api_key=os.getenv("GROQ_API_KEY"),
+                        temperature=config.temperature,
+                    )
+                elif primary_provider == "openrouter":
+                    from langchain_openai import ChatOpenAI
+                    llm_client = ChatOpenAI(
+                        model_name=primary_name,
+                        openai_api_key=os.getenv("OPENROUTER_API_KEY"),
+                        openai_api_base="https://openrouter.ai/api/v1",
                         temperature=config.temperature,
                     )
                 else:
                     from langchain_google_genai import ChatGoogleGenerativeAI
+                    model_to_use = primary_name if ("gemini" in primary_name and not "/" in primary_name) else "gemini-3.1-flash-lite"
                     llm_client = ChatGoogleGenerativeAI(
-                        model=config.primary_llm_name,
+                        model=model_to_use,
                         google_api_key=os.getenv("GEMINI_API_KEY"),
                         temperature=config.temperature,
                     )
@@ -435,6 +443,18 @@ class RAGEngine:
             # Stage 2: Retrieval
             tracer.start_stage(PipelineStage.RETRIEVAL)
             effective_query = rewritten_query if rewritten_query else analysis.expanded_query
+            
+            # --- Upgrade: HyDE ---
+            enable_hyde = getattr(config, "enable_hyde", False) or config.pipeline_variant == "hyde"
+            hyde_doc = None
+            if enable_hyde:
+                from app.services.hyde_retriever import HyDERetriever
+                hyde_retriever = HyDERetriever(llm_client)
+                hyde_doc = hyde_retriever.generate_hypothetical_document(effective_query)
+                # We search FAISS using the HyDE doc instead of the raw query
+                search_query = hyde_doc
+            else:
+                search_query = effective_query
             
             # Phase 3: Semantic Router query classification
             from app.services.semantic_router import SemanticRouter
@@ -466,13 +486,16 @@ class RAGEngine:
                 seen_contents = set()
                 merged_results = []
                 for sub_q in analysis.sub_queries:
-                    sub_res = self._single_hybrid_search(sub_q, project_id, candidate_k // 2)
+                    # If HyDE is enabled, we'd ideally apply it to subqueries too, but to avoid 
+                    # multiple expensive LLM calls, we just use the raw subquery or apply HyDE once.
+                    sub_search_query = hyde_retriever.generate_hypothetical_document(sub_q) if enable_hyde else sub_q
+                    sub_res = self._single_hybrid_search(sub_search_query, project_id, candidate_k // 2)
                     for doc, score in sub_res:
                         if doc.page_content not in seen_contents:
                             seen_contents.add(doc.page_content)
                             merged_results.append((doc, score))
             else:
-                merged_results = self._single_hybrid_search(effective_query, project_id, candidate_k)
+                merged_results = self._single_hybrid_search(search_query, project_id, candidate_k)
 
             used_hybrid = getattr(config, "use_hybrid_search", True)
 

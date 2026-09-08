@@ -1,10 +1,12 @@
+import os
 import hashlib
 from typing import List, Dict, Optional
 from datetime import datetime
 from sqlmodel import Session, select
 from app.models.rag import Chunk, Document, Project
 
-VECTOR_STORE_PATH = "faiss_index"
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+VECTOR_STORE_PATH = os.path.join(BACKEND_DIR, "faiss_index")
 
 class DeltaIndexer:
     def __init__(self, session: Session, vector_store, embedding_model):

@@ -18,8 +18,8 @@ class ModelProfile(BaseModel):
 
 
 DEFAULT_MODEL_PROFILES: Dict[str, ModelProfile] = {
-    "groq/llama3-8b-8192": ModelProfile(
-        model_name="groq/llama3-8b-8192",
+    "groq/qwen/qwen3.8-27b": ModelProfile(
+        model_name="groq/qwen/qwen3.8-27b",
         provider="groq",
         context_window=128000,
         reasoning_level="STANDARD",
@@ -28,13 +28,23 @@ DEFAULT_MODEL_PROFILES: Dict[str, ModelProfile] = {
         supports_tools=True,
         supports_json=True
     ),
-    "gemini/gemini-1.5-flash": ModelProfile(
-        model_name="gemini/gemini-1.5-flash",
+    "gemini/gemini-3.7-flash": ModelProfile(
+        model_name="gemini/gemini-3.7-flash",
+        provider="gemini",
+        context_window=1000000,
+        reasoning_level="STANDARD",
+        estimated_cost_per_1k=0.0003,
+        expected_latency_ms=450,
+        supports_tools=True,
+        supports_json=True
+    ),
+    "gemini/gemini-3.1-flash-lite": ModelProfile(
+        model_name="gemini/gemini-3.1-flash-lite",
         provider="gemini",
         context_window=1000000,
         reasoning_level="LOW",
-        estimated_cost_per_1k=0.0003,
-        expected_latency_ms=450,
+        estimated_cost_per_1k=0.0001,
+        expected_latency_ms=300,
         supports_tools=True,
         supports_json=True
     ),
@@ -57,8 +67,15 @@ class ModelRegistry:
     def __init__(self):
         self._profiles: Dict[str, ModelProfile] = dict(DEFAULT_MODEL_PROFILES)
 
+    def list_models(self) -> List[Dict[str, Any]]:
+        """List all active registered models."""
+        return [
+            {"name": k, "provider": v.provider, "reasoning_level": v.reasoning_level, "context_window": v.context_window}
+            for k, v in self._profiles.items()
+        ]
+
     def get_profile(self, model_name: str) -> ModelProfile:
-        return self._profiles.get(model_name, DEFAULT_MODEL_PROFILES["gemini/gemini-1.5-flash"])
+        return self._profiles.get(model_name, DEFAULT_MODEL_PROFILES["gemini/gemini-3.7-flash"])
 
     def select_best_model(self, max_latency_ms: int, max_cost: float, reasoning_level: str) -> str:
         """Selects optimal model candidate satisfying constraints."""
@@ -68,7 +85,7 @@ class ModelRegistry:
                 candidates.append(profile)
 
         if not candidates:
-            return "gemini/gemini-1.5-flash"  # Fastest fallback
+            return "gemini/gemini-3.7-flash"  # Fastest fallback
 
         if reasoning_level == "HIGH":
             high_candidates = [c for c in candidates if c.reasoning_level == "HIGH"]
@@ -76,4 +93,4 @@ class ModelRegistry:
                 return high_candidates[0].model_name
 
         # Return default fast versatile model
-        return "gemini/gemini-1.5-flash"
+        return "gemini/gemini-3.7-flash"

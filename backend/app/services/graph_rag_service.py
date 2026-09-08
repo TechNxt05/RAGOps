@@ -20,9 +20,9 @@ class GraphNode(BaseModel):
 
 class GraphRAGService:
     """
-    Stage 1 & Stage 2 GraphRAG Service:
-    - Stage 1: Structural graph built from document titles, section headers, and cross-references.
-    - Stage 2: Entity & concept provenance nodes (Document/Section/Entity/Concept/Relationship/Claim/Source).
+    Stage 1 GraphRAG Service:
+    - Stage 1: Structural graph built from document titles, section headers, and text chunks.
+      Performs lightweight entity linking via string matching, NOT typed RAGA-style relationships.
     """
 
     def __init__(self):
@@ -70,7 +70,7 @@ class GraphRAGService:
                 if current_section_id in self._graph:
                     self._graph[current_section_id].children.append(chunk_node_id)
 
-                # Stage 2: Extract key entity / concept nodes from chunk text
+                # Stage 1 (Supplemental): Extract key entity strings from chunk text
                 entities = self._extract_lightweight_entities(content)
                 for ent in entities:
                     ent_id = f"entity_{hash(ent) & 0xffffffff}"

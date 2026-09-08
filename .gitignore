@@ -1,43 +1,74 @@
-# Python
+# ==========================================
+# RAGOps Master .gitignore
+# ==========================================
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.env
+
+# Python & Virtual Environments
 __pycache__/
 *.py[cod]
 *$py.class
 venv/
-.env
-.env.example
-.venv
+.venv/
 env/
 *.log
+*.sqlite3
+*.db
+*.db-journal
+postgres_data/
+ragops.db*
+backend/ragops.db*
 
-# Node
+# Node / Next.js
 node_modules/
 .next/
 dist/
 out/
 build/
 coverage/
+*.tsbuildinfo
 
-# Misc
+# OS & IDE
 .DS_Store
+Thumbs.db
 .vscode/
 .idea/
-*.db
-*.sqlite3
-postgres_data/
 
-# Local Only
-backend/ragops.db
-*.db-journal
+# FAISS Vector Indices & Binary Cache Stores
+faiss_index/
+backend/faiss_index/
+*.faiss
+*.pkl
 
-# Outputs and Benchmark Data
-*benchmark_report*.json
+# Benchmark Reports & Intermediate State Files
+benchmark_report*.json
+*.partial.json
+backend/benchmark_report*.json
 *benchmark_*out*.txt
 backend/diff_output.txt
 backend/data/
 
-# Scratch Scripts
-scratch_test*.py
-check_failures.py
-
-# Data / FAISS Indices
-backend/faiss_index/
+# Scratch, Debug & Transient Scripts
+Results.txt
+logs.txt
+Comparison.txt
+scratch/
+audit_*.py
+scratch_*.py
+check_*.py
+test_*.py
+inspect_*.py
+debug_*.py
+backend/test_*.py
+backend/inspect_*.py
+backend/debug_*.py
+backend/compute_*.py
+backend/paired_*.py
+backend/rebuild_*.py
+backend/run_full_benchmark.py
+backend/run_llama_benchmark.py
+backend/run_qwen_benchmark.py

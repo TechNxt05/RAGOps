@@ -91,32 +91,21 @@ class OutputContractBuilder:
         """
         query_lower = query.lower()
         
-        # Code signals
-        if any(kw in query_lower for kw in [
-            "code", "function", "script", "implement", "write a",
-            "program", "snippet", "syntax", "example of"
-        ]):
+        # Code signals (specific programming requests)
+        import re
+        if re.search(r'\b(write (?:a |the )?(?:python|sql|code|script|function|program)|code snippet|code example|syntax for)\b', query_lower):
             return ResponseFormat.CODE
         
         # Table/comparison signals
-        if any(kw in query_lower for kw in [
-            "compare", "difference between", "vs", "versus",
-            "table", "list all", "what are the", "types of"
-        ]):
+        if re.search(r'\b(compare|difference between| vs | versus |in a table|tabular)\b', query_lower):
             return ResponseFormat.TABLE
         
         # List/structured signals
-        if any(kw in query_lower for kw in [
-            "list", "enumerate", "what are", "steps to",
-            "how to", "ways to", "features of", "advantages"
-        ]):
+        if re.search(r'\b(list|enumerate|what are the|steps to|ways to|features of|advantages)\b', query_lower):
             return ResponseFormat.STRUCTURED
         
         # Analytical/detailed signals
-        if any(kw in query_lower for kw in [
-            "explain", "why", "how does", "describe",
-            "elaborate", "analyze", "what causes", "impact of"
-        ]):
+        if re.search(r'\b(explain|why|how does|describe|elaborate|analyze|what causes|impact of)\b', query_lower):
             return ResponseFormat.DETAILED
         
         # Use query_intent from Phase 1 if available

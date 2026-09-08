@@ -9,7 +9,8 @@ class TurnType(Enum):
 
 class TurnTypeRouter:
     CHIT_CHAT_PATTERNS = [
-        r"^(hi|hello|hey|thanks|thank you|ok|okay|got it|sure|great|perfect)[\s!.]*$",
+        r"^(hi|hello|hey|good morning|good afternoon|good evening|howdy|how are you|hey there|hello there)[\s,!.]*(good morning|good afternoon|good evening|how are you|there)?[\s!.,?]*$",
+        r"^(thanks|thank you|ok|okay|got it|sure|great|perfect)[\s!.]*$",
         r"^(explain|summarize|simplify|rephrase|clarify|elaborate)\s+(that|this|it|more)",
         r"^(what do you mean|can you repeat|say that again)",
         r"^(yes|no|maybe|correct|wrong|right|exactly)[\s!.]*$",

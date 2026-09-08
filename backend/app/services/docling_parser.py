@@ -38,7 +38,8 @@ class DoclingParser:
                 "Output ONLY the context header string."
             )
             res = await litellm_gateway.generate(prompt=prompt, temperature=0.1)
-            situating_context = res.content.strip()
+            from app.utils.llm_response import extract_text
+            situating_context = extract_text(res.content)
             return f"Context: {situating_context}\n\n{chunk_content}"
         except Exception:
             return chunk_content

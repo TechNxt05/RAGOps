@@ -20,6 +20,7 @@ class PipelineVariant(str, Enum):
     ADAPTIVE = "adaptive"
     POLICY_DRIVEN = "policy_driven"
     LATE_CHUNKING = "late_chunking"
+    HYDE = "hyde"
 
 
 # ------------------------------------------------------------------
@@ -132,6 +133,7 @@ VARIANT_CONFIGS: Dict[PipelineVariant, Dict[str, Any]] = {
         "use_output_contract": True,
         "use_cost_control": True,
         "enable_adaptive_router": False,
+        "enable_reflective_generation": True,
     },
     PipelineVariant.ADAPTIVE: {
         "label": "Adaptive RAGOps",
@@ -151,6 +153,7 @@ VARIANT_CONFIGS: Dict[PipelineVariant, Dict[str, Any]] = {
         "use_cost_control": True,
         "enable_adaptive_router": True,
         "enable_runtime_planner": False,
+        "enable_reflective_generation": True,
     },
     PipelineVariant.POLICY_DRIVEN: {
         "label": "Policy-Driven RAGOps",
@@ -170,6 +173,7 @@ VARIANT_CONFIGS: Dict[PipelineVariant, Dict[str, Any]] = {
         "use_cost_control": True,
         "enable_adaptive_router": True,
         "enable_runtime_planner": True,
+        "enable_reflective_generation": True,
     },
     PipelineVariant.LATE_CHUNKING: {
         "label": "Late-Chunked RAGOps",
@@ -190,6 +194,27 @@ VARIANT_CONFIGS: Dict[PipelineVariant, Dict[str, Any]] = {
         "enable_adaptive_router": True,
         "enable_runtime_planner": False,
         "enable_late_chunking": True,
+        "enable_reflective_generation": True,
+    },
+    PipelineVariant.HYDE: {
+        "label": "HyDE RAGOps",
+        "description": "Hypothetical Document Embeddings for dense retrieval.",
+        "use_hybrid_search": False, # Use dense vector search with HyDE
+        "use_reranker": True,
+        "use_query_rewriting": False, # HyDE acts as the rewrite
+        "use_multi_query": False,
+        "use_contextual_compressor": True,
+        "use_conflict_detector": True,
+        "use_cross_reference": True,
+        "use_confidence_gate": True,
+        "use_self_correction": True,
+        "use_absence_prover": True,
+        "use_semantic_cache": True,
+        "use_output_contract": True,
+        "use_cost_control": True,
+        "enable_adaptive_router": False,
+        "enable_runtime_planner": False,
+        "enable_hyde": True,
     },
 }
 

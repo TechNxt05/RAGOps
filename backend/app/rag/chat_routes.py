@@ -8,8 +8,15 @@ from datetime import datetime
 from typing import List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException
-from langchain.agents import AgentExecutor, create_tool_calling_agent
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+try:
+    from langchain.agents import AgentExecutor, create_tool_calling_agent
+except Exception:
+    AgentExecutor = None
+    create_tool_calling_agent = None
+try:
+    from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+except Exception:
+    from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import StructuredTool
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -1100,10 +1107,28 @@ async def post_message(
     contract_verification_res = output_verifier.verify(answer, contract, retrieved_chunks_dicts)
     contract_verification_res["format"] = contract.format.value
 
-    # --- Upgrade 3: Claim-Level Citation Verification ---
-    from app.services.claim_verifier import ClaimVerifier
-    claim_verifier = ClaimVerifier()
-    claim_verification_res = claim_verifier.verify(answer, ctx_chunks)
+    # --- Upgrade 3: Claim-Level Citation Verification & Phase 1 Reflective Generation ---
+    enable_reflective = getattr(rag_config, "enable_reflective_generation", False)
+    if enable_reflective:
+        from app.services.reflective_generation import ReflectiveGenerator
+        ref_gen = ReflectiveGenerator(llm_gen)
+        answer, claim_verification_res, stage_reached, outcome = await ref_gen.generate_with_reflection(answer, content, ctx_chunks)
+        if isinstance(trace_dict, dict):
+            if "stages" not in trace_dict:
+                trace_dict["stages"] = {}
+            trace_dict["stages"]["reflective_generation"] = {
+                "stage": "reflective_generation",
+                "status": "success",
+                "metadata": {
+                    "stage_reached": stage_reached,
+                    "outcome": outcome
+                }
+            }
+    else:
+        from app.services.claim_verifier import ClaimVerifier
+        claim_verifier = ClaimVerifier()
+        claim_verification_res = claim_verifier.verify(answer, ctx_chunks)
+
     claim_verification_dict = claim_verification_res.to_dict()
     
     # Attach unverified claims warning to the output contract
@@ -1199,7 +1224,8 @@ async def post_message(
                 f"Do not use quotes. User: {content}\nAI: {answer}"
             )
             title_response = llm.invoke(title_prompt)
-            new_title = title_response.content.strip()
+            from app.utils.llm_response import extract_text
+            new_title = extract_text(title_response.content)
             new_title = new_title.replace('"', "").replace("'", "").replace("**", "")[:50]
             chat_session.title = new_title
             session_db.add(chat_session)
@@ -1286,9 +1312,14 @@ async def compare_models(
             "citations_count": len(ctx_chunks),
         }
 
+    primary_provider = config.primary_models[0]["provider"] if config.primary_models else "google"
+    primary_name = config.primary_models[0]["name"] if config.primary_models else "gemini-2.5-flash"
+    fallback_provider = config.fallback_models[0]["provider"] if config.fallback_models else "google"
+    fallback_name = config.fallback_models[0]["name"] if config.fallback_models else "gemini-2.5-flash"
+
     left, right = await asyncio.gather(
-        run_side(config.primary_llm_provider, config.primary_llm_name),
-        run_side(config.fallback_llm_provider, config.fallback_llm_name),
+        run_side(primary_provider, primary_name),
+        run_side(fallback_provider, fallback_name),
     )
 
     winner = "tie"

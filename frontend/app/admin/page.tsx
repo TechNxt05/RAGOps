@@ -24,6 +24,8 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ModelOrchestrator } from '@/components/ModelOrchestrator';
 import { DocumentManagerPanel } from '@/components/DocumentManagerPanel';
+import { BenchmarkStudio } from '@/components/BenchmarkStudio';
+import { Sparkles } from 'lucide-react';
 
 export default function AdminDashboard() {
     const { user, logout, isLoading } = useAuth();
@@ -244,6 +246,12 @@ export default function AdminDashboard() {
                             Analytics
                         </Link>
                     </Button>
+                    <Button variant="outline" className="w-full gap-2 text-xs border-indigo-500/40 text-indigo-400 hover:text-white hover:bg-indigo-950/40" asChild>
+                        <Link href="/benchmark">
+                            <Sparkles className="h-4 w-4" />
+                            AutoRAGBench
+                        </Link>
+                    </Button>
                 </div>
             )}
         </>
@@ -317,6 +325,7 @@ export default function AdminDashboard() {
                                 <TabsTrigger value="config" className="gap-2"><Settings className="w-4 h-4" /> RAG Configuration</TabsTrigger>
                                 <TabsTrigger value="files" className="gap-2"><FileText className="w-4 h-4" /> Knowledge Base</TabsTrigger>
                                 <TabsTrigger value="inspector" className="gap-2"><Database className="w-4 h-4" /> Knowledge Inspector</TabsTrigger>
+                                <TabsTrigger value="benchmark" className="gap-2"><Sparkles className="w-4 h-4 text-indigo-400" /> AutoRAGBench</TabsTrigger>
                             </TabsList>
 
                             {/* CONFIG TAB */}
@@ -883,6 +892,13 @@ export default function AdminDashboard() {
                                         </CardContent>
                                     </Card>
                                 </div>
+                            </TabsContent>
+
+                            {/* AUTORAGBENCH TAB */}
+                            <TabsContent value="benchmark" className="mt-6">
+                                <ErrorBoundary section="AutoRAGBench Studio">
+                                    <BenchmarkStudio projectId={selectedProject.id} />
+                                </ErrorBoundary>
                             </TabsContent>
                         </Tabs>
                     </div>

@@ -1,4 +1,5 @@
 from typing import List, Optional
+from app.utils.llm_response import extract_text
 
 class QueryRewriter:
     def __init__(self, llm_client):
@@ -30,7 +31,7 @@ Original query: {query}
 Diversified search query:"""
             
             response = await self.llm.ainvoke(prompt)
-            rewritten = response.content.strip()
+            rewritten = extract_text(response.content)
             
             return {
                 "original_query": query,
@@ -68,7 +69,7 @@ Standalone query:"""
         
         # We assume the llm_client has an ainvoke method like LangChain Chat Models
         response = await self.llm.ainvoke(prompt)
-        rewritten = response.content.strip()
+        rewritten = extract_text(response.content)
         
         return {
             "original_query": query,

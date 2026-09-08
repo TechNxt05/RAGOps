@@ -49,7 +49,7 @@ class RuntimePlanner:
         from app.services.semantic_router import SemanticRouter
         sem_router = SemanticRouter()
         sem_res = sem_router.classify(query)
-        cat_obj = sem_res.get("category", "factoid")
+        cat_obj = sem_res.get("query_category") or sem_res.get("category", "factoid")
         cat_name = cat_obj.value if hasattr(cat_obj, "value") else str(cat_obj).lower()
 
         # Map category to QueryIntent

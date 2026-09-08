@@ -38,7 +38,7 @@ from mcp.server.fastmcp import FastMCP
 # Initialize FastMCP server
 mcp = FastMCP(
     name="RAGOps",
-    description=(
+    instructions=(
         "Enterprise RAG platform tools: full hybrid RAG pipeline execution, "
         "raw chunk retrieval, computation routing, adaptive router classification, "
         "and 24h rolling p95 SLA health telemetry."

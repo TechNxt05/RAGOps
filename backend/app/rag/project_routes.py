@@ -61,6 +61,51 @@ def patch_project_rag_config(
     return config
 
 
+class ProjectPipelinePatch(BaseModel):
+    pipeline_variant: str
+
+@router.patch("/{project_id}/pipeline", response_model=RAGConfig)
+def patch_project_pipeline(
+    project_id: int,
+    patch: ProjectPipelinePatch,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_admin),
+):
+    from app.benchmark.variants import VARIANT_CONFIGS, PipelineVariant
+    
+    variant_enum = None
+    for v in PipelineVariant:
+        if v.value == patch.pipeline_variant:
+            variant_enum = v
+            break
+            
+    if not variant_enum or variant_enum not in VARIANT_CONFIGS:
+        raise HTTPException(status_code=400, detail="Invalid pipeline variant")
+        
+    config = session.exec(
+        select(RAGConfig)
+        .where(RAGConfig.project_id == project_id)
+        .where(RAGConfig.is_active == True)
+        .order_by(RAGConfig.created_at.desc())
+    ).first()
+    
+    if not config:
+        config = RAGConfig(project_id=project_id)
+        
+    config.pipeline_variant = patch.pipeline_variant
+    
+    # Apply variant config properties to the RAGConfig
+    v_conf = VARIANT_CONFIGS[variant_enum]
+    for k, v in v_conf.items():
+        if hasattr(config, k):
+            setattr(config, k, v)
+            
+    session.add(config)
+    session.commit()
+    session.refresh(config)
+    return config
+
+
 @router.post("/", response_model=Project)
 def create_project(project: Project, session: Session = Depends(get_session), current_user: User = Depends(get_current_admin)):
     session.add(project)

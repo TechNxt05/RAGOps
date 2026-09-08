@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
-import { Send, Bot, User as UserIcon, Trash2, Zap, Settings2 } from 'lucide-react';
+import { Send, Bot, User as UserIcon, Trash2, Zap, Settings2, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -139,15 +139,28 @@ export default function PlaygroundPage() {
                     </div>
                 </div>
 
-                <div className="mt-auto pt-6 border-t text-xs text-slate-400">
-                    Use this mode to test prompts and models without RAG context.
+                <div className="mt-auto pt-6 border-t space-y-3">
+                    <Button variant="outline" className="w-full text-xs gap-1.5 border-indigo-500/40 text-indigo-500 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50" asChild>
+                        <a href="/benchmark">
+                            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                            AutoRAGBench Studio
+                        </a>
+                    </Button>
+                    <p className="text-[11px] text-slate-400">
+                        Need multi-model & pipeline evaluations? Use AutoRAGBench Studio.
+                    </p>
                 </div>
             </div>
 
             {/* Main Chat Area */}
             <div className="flex-1 flex flex-col h-full relative">
                 <header className="h-16 border-b flex items-center justify-between px-6 bg-white/50 backdrop-blur dark:bg-slate-900/50">
-                    <div className="font-semibold text-slate-700 dark:text-slate-200">Interactive Session</div>
+                    <div className="flex items-center gap-3">
+                        <div className="font-semibold text-slate-700 dark:text-slate-200">Interactive Session</div>
+                        <a href="/benchmark" className="text-xs text-indigo-500 dark:text-indigo-400 hover:underline flex items-center gap-1 font-medium">
+                            <Sparkles className="w-3 h-3" /> AutoRAGBench &rarr;
+                        </a>
+                    </div>
                     <Button variant="ghost" size="sm" onClick={clearChat} className="text-red-500 hover:text-red-600 hover:bg-red-50">
                         <Trash2 className="w-4 h-4 mr-2" />
                         Clear

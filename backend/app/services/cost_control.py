@@ -26,8 +26,10 @@ class TFIDFEmbedder:
         doc_count = len(texts)
         df: Dict[str, int] = {}
         
+        import re
         for text in texts:
-            words = set(text.lower().split())
+            clean_text = re.sub(r'[^\w\s]', '', text.lower())
+            words = set(clean_text.split())
             for word in words:
                 df[word] = df.get(word, 0) + 1
         
@@ -40,13 +42,17 @@ class TFIDFEmbedder:
     
     def embed(self, text: str) -> List[float]:
         if not self.fitted:
-            words = text.lower().split()
+            import re
+            clean_text = re.sub(r'[^\w\s]', '', text.lower())
+            words = clean_text.split()
             self.vocab = {w: i for i, w in enumerate(set(words))}
             self.idf = {w: 1.0 for w in self.vocab}
             self.fitted = True
         
         vec = [0.0] * len(self.vocab)
-        words = text.lower().split()
+        import re
+        clean_text = re.sub(r'[^\w\s]', '', text.lower())
+        words = clean_text.split()
         tf: Dict[str, float] = {}
         
         for word in words:
@@ -211,8 +217,8 @@ class QueryRouter:
     """
     
     DEFAULT_MODEL_MAP = {
-        ModelTier.SIMPLE: "gemini-1.5-flash",      # Cheapest
-        ModelTier.STANDARD: "gemini-1.5-pro",       # Mid
+        ModelTier.SIMPLE: "gemini-2.5-flash",      # Cheapest
+        ModelTier.STANDARD: "gemini-2.5-pro",       # Mid
         ModelTier.COMPLEX: "gemini-ultra",           # Best (use sparingly)
     }
     
@@ -384,7 +390,7 @@ class CostControlManager:
     
     def __init__(
         self,
-        cache_threshold: float = 0.75,
+        cache_threshold: float = 0.70,
         cache_ttl: int = 3600,
         hourly_limit_usd: float = 5.0,
         daily_limit_usd: float = 50.0,

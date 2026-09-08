@@ -172,19 +172,28 @@ class ContextualCompressor:
     
     def _contains_factual_content(self, sentence: str) -> bool:
         """
-        Detect sentences containing facts that must be preserved:
-        numbers, dates, percentages, proper nouns, money amounts.
+        Detect sentences containing critical facts that must be preserved:
+        numbers, dates, percentages, specific entities, money amounts.
         """
-        factual_patterns = [
-            r"\b\d+(?:\.\d+)?%",           # percentages
-            r"\$[\d,]+(?:\.\d{2})?",        # money
-            r"\b\d{4}\b",                   # years
+        case_insensitive_patterns = [
+            r"\b\d+(?:\.\d+)?%",                            # percentages e.g. 99.5%
+            r"\$[\d,]+(?:\.\d{2})?",                        # money e.g. $4.5 million
+            r"\b\d+\s*(?:microseconds|ms|ns|seconds|qubits|gb|mb|ghz|mhz|m/s|km)\b", # physical units
+            r"\b(?:19|20)\d{2}\b",                          # specific 4-digit years
             r"\b\d+\s+(?:days|months|years|hours|weeks)\b",  # durations
-            r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b",          # proper nouns
-            r"\b(?:section|clause|article)\s+[\d\.]+",       # references
+            r"\b(?:section|clause|article|table|figure)\s+[\d\.]+", # references
         ]
         
-        for pattern in factual_patterns:
+        for pattern in case_insensitive_patterns:
             if re.search(pattern, sentence, re.IGNORECASE):
                 return True
+
+        # Proper nouns (e.g. "Google Sycamore", "Peter Shor") - strictly case sensitive
+        # Skip checking the very first word of the sentence to avoid matching capitalized sentence starters
+        words = sentence.split()
+        if len(words) >= 2:
+            body_text = " ".join(words[1:])
+            if re.search(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b", body_text):
+                return True
+                
         return False

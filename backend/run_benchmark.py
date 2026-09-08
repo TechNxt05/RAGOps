@@ -53,6 +53,8 @@ async def main():
     parser.add_argument("--project-id", type=int, required=True, help="Project ID to benchmark against")
     parser.add_argument("--variants", type=str, default=None, help="Comma-separated list of variants (e.g. naive,hybrid,full_ragops)")
     parser.add_argument("--output", type=str, default="benchmark_report.json", help="Output JSON report path")
+    parser.add_argument("--provider", type=str, default="google", help="LLM Provider (default: google)")
+    parser.add_argument("--model", type=str, default="gemini-3.1-flash-lite", help="LLM Model (default: gemini-3.1-flash-lite)")
     parser.add_argument("--verbose", action="store_true", help="Show per-query detail")
     parser.add_argument("--resume", action="store_true", default=True, help="Resume from partial state if it exists (default: True)")
     parser.add_argument("--fresh", action="store_true", help="Force a clean start, ignoring any partial state")
@@ -109,39 +111,49 @@ async def main():
 
     # Seed benchmark document and chunks if project has no indexed documents
     from app.models.rag import Document, Chunk
-    existing_doc = session_db.exec(select(Document).where(Document.project_id == args.project_id).where(Document.filename == "quantum_computing.txt")).first()
-    if not existing_doc:
-        logger.info("Ingesting Quantum Computing corpus...")
-        qc_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "quantum_computing.txt")
-        if os.path.exists(qc_path):
-            with open(qc_path, "r", encoding="utf-8") as f:
-                content = f.read()
-        else:
-            content = "Quantum computing is a rapidly-emerging technology that harnesses the laws of quantum mechanics to solve problems too complex for classical computers."
+    existing_docs = session_db.exec(select(Document).where(Document.project_id == args.project_id)).all()
+    if not existing_docs:
+        logger.info("Ingesting full corpus from backend/data/...")
+        data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+        files_to_ingest = []
+        if os.path.exists(data_dir):
+            files_to_ingest = [f for f in os.listdir(data_dir) if f.endswith(".txt")]
             
-        doc = Document(
-            project_id=args.project_id,
-            filename="quantum_computing.txt",
-            processed=True,
-            content=content[:10000] # Limit metadata size
-        )
-        session_db.add(doc)
-        session_db.commit()
-        session_db.refresh(doc)
+        if not files_to_ingest:
+            logger.warning("No corpus files found! Reverting to placeholder.")
+            files_to_ingest = ["placeholder.txt"]
 
-        # Basic Recursive Character Chunking
-        from langchain.text_splitter import RecursiveCharacterTextSplitter
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=150)
-        splits = text_splitter.split_text(content)
-        
-        chunks = []
-        for i, split in enumerate(splits):
-            c = Chunk(document_id=doc.id, content=split, chunk_index=i)
-            chunks.append(c)
+        for filename in files_to_ingest:
+            file_path = os.path.join(data_dir, filename)
+            if os.path.exists(file_path):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+            else:
+                content = "Quantum computing is a rapidly-emerging technology that harnesses the laws of quantum mechanics to solve problems too complex for classical computers."
+                
+            doc = Document(
+                project_id=args.project_id,
+                filename=filename,
+                processed=True,
+                content=content[:10000] # Limit metadata size
+            )
+            session_db.add(doc)
+            session_db.commit()
+            session_db.refresh(doc)
+
+            # Basic Recursive Character Chunking
+            from langchain.text_splitter import RecursiveCharacterTextSplitter
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=150)
+            splits = text_splitter.split_text(content)
             
-        session_db.add_all(chunks)
-        session_db.commit()
-        logger.info(f"Ingested {len(chunks)} chunks from Quantum Computing corpus.")
+            chunks = []
+            for i, split in enumerate(splits):
+                c = Chunk(document_id=doc.id, content=split, chunk_index=i)
+                chunks.append(c)
+                
+            session_db.add_all(chunks)
+            session_db.commit()
+            logger.info(f"Ingested {len(chunks)} chunks from {filename}.")
 
         # Seed FAISS and BM25 index
         from app.rag.engine import RAGEngine
@@ -160,7 +172,9 @@ async def main():
             user=BenchmarkUser(),
             variants=variant_filter,
             resume=args.resume,
-            output_file=args.output
+            output_file=args.output,
+            provider_override=args.provider,
+            model_override=args.model
         )
 
         logger.info(f"Starting AutoRAGBench for project_id={args.project_id}")

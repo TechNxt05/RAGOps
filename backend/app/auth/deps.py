@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -33,3 +34,15 @@ def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
             detail="The user doesn't have enough privileges",
         )
     return current_user
+
+def get_optional_current_user(token: Optional[str] = Depends(OAuth2PasswordBearer(tokenUrl="auth/token", auto_error=False)), session: Session = Depends(get_session)) -> Optional[User]:
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if not username:
+            return None
+        return session.query(User).filter(User.email == username).first()
+    except Exception:
+        return None

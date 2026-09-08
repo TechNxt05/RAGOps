@@ -21,7 +21,7 @@ def render_ascii_table(summaries: List[VariantSummary]) -> str:
     """Render a leaderboard-style ASCII comparison table."""
     headers = [
         "Variant",
-        "Overall",
+        "Overall (95% CI)",
         "Context",
         "Faithful",
         "AnsRel",
@@ -35,16 +35,8 @@ def render_ascii_table(summaries: List[VariantSummary]) -> str:
     import math
     rows = []
     for s in sorted(summaries, key=lambda x: x.avg_overall_score, reverse=True):
-        # Calculate standard deviation for overall score
-        valid_results = [r.ragas_overall for r in s.query_results if r.error is None]
-        n_ok = len(valid_results)
-        if n_ok > 1:
-            mean = sum(valid_results) / n_ok
-            variance = sum((x - mean) ** 2 for x in valid_results) / (n_ok - 1)
-            std_dev = math.sqrt(variance)
-            overall_str = f"{_fmt(s.avg_overall_score)} ± {_fmt(std_dev, 2)}"
-        else:
-            overall_str = _fmt(s.avg_overall_score)
+        # Use 95% Bootstrap CI for overall score
+        overall_str = f"{_fmt(s.avg_overall_score)} [{_fmt(s.ci_lower_95, 2)}-{_fmt(s.ci_upper_95, 2)}]"
             
         rows.append([
             s.label,
@@ -182,9 +174,29 @@ def generate_json_report(summaries: List[VariantSummary]) -> Dict[str, Any]:
     }
 
 
-def save_report(summaries: List[VariantSummary], output_path: str = "benchmark_report.json") -> str:
-    """Save the full JSON report to disk and return the path."""
-    report = generate_json_report(summaries)
-    with open(output_path, "w") as f:
-        json.dump(report, f, indent=2, default=str)
-    return output_path
+def save_report(summaries: List[VariantSummary], filepath: str) -> str:
+    import json
+    import os
+    import subprocess
+    from dataclasses import asdict
+    
+    commit_hash = "unknown"
+    try:
+        commit_hash = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("utf-8").strip()
+    except Exception:
+        pass
+
+    data = {
+        "metadata": {
+            "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
+            "git_commit": commit_hash,
+            "dataset_version": "v1.1_expanded",
+            "environment": os.getenv("ENVIRONMENT", "local"),
+        },
+        "summaries": [asdict(s) for s in summaries]
+    }
+    
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, default=str)
+    
+    return os.path.abspath(filepath)

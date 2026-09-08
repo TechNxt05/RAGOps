@@ -24,7 +24,7 @@ class RAGConfig(SQLModel, table=True):
         default=[
             {"provider": "groq", "name": "llama3-8b-8192"},
             {"provider": "openrouter", "name": "meta-llama/llama-3-8b-instruct:free"},
-            {"provider": "google", "name": "gemini-1.5-flash"}
+            {"provider": "google", "name": "gemini-2.5-flash"}
         ],
         sa_column=Column(JSON)
     )
@@ -62,6 +62,9 @@ class RAGConfig(SQLModel, table=True):
     use_multi_query: bool = Field(default=True)
     enable_self_correction: bool = Field(default=True)
     enable_adaptive_router: bool = Field(default=True)
+    
+    # Phase 3: Admin Pipeline Selection
+    pipeline_variant: str = Field(default="naive")
 
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)

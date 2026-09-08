@@ -16,7 +16,7 @@ class ComputationRouter:
     # Tier 2: Numeric comparisons - route to computation
     TIER2_PATTERNS = [
         r"\b(greater than|less than|more than|fewer than|above|below|"
-        r"over|under|at least|at most|between .* and)\b",
+        r"at least|at most|between\s+[\$\d\.]+\s+and\s+[\$\d\.]+)\b",
         r"(>\s*\d+|<\s*\d+|\>=\s*\d+|\<=\s*\d+)",
     ]
     
