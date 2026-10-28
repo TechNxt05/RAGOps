@@ -1,38 +1,38 @@
-import os
-import sys
 from typing import List, Tuple, Any
+
+from app.services import model_registry
+
+
+def _text_of(c: Any) -> str:
+    if hasattr(c, 'page_content'):
+        return c.page_content
+    if isinstance(c, tuple) and len(c) > 0 and hasattr(c[0], 'page_content'):
+        return c[0].page_content
+    if isinstance(c, dict) and 'content' in c:
+        return c['content']
+    return str(c)
+
 
 class BGEReranker:
     """
-    Reranks documents/chunks using the BAAI/bge-reranker-base cross-encoder model.
-    Falls back gracefully to returning documents as-is if FlagEmbedding is not installed
-    or if model initialization/inference fails.
+    Reranks chunks with the BAAI/bge-reranker-base cross-encoder.
+
+    For (document, score) tuples the score is REPLACED by the cross-encoder's
+    relevance probability in [0, 1], so downstream stages (confidence gate,
+    compression, UI) see a real relevance signal instead of the RRF/vector score
+    the chunk arrived with. Falls back to the incoming order if the model is
+    unavailable.
     """
 
-    def __init__(self, model_name: str = "BAAI/bge-reranker-base"):
-        self.model_name = model_name
-        self.reranker = None
-        self.enabled = False
-        self._initialized = False
+    def __init__(self):
+        self.last_scored = False
+
+    @property
+    def enabled(self) -> bool:
+        return model_registry.get_reranker() is not None
 
     def initialize(self):
-        if self._initialized:
-            return
-        
-        self._initialized = True
-        try:
-            # FlagReranker uses FlagEmbedding package
-            from FlagEmbedding import FlagReranker
-            print(f"Initializing BGE Reranker with model: {self.model_name}")
-            self.reranker = FlagReranker(self.model_name, use_fp16=False)
-            self.enabled = True
-            print("BGE Reranker initialized successfully.")
-        except ImportError:
-            print("FlagEmbedding not installed. BGE Reranker is disabled (graceful fallback).")
-            self.enabled = False
-        except Exception as e:
-            print(f"Error initializing BGE Reranker: {e}. Graceful fallback enabled.")
-            self.enabled = False
+        model_registry.get_reranker()
 
     def rerank(
         self,
@@ -40,54 +40,37 @@ class BGEReranker:
         chunks: List[Any],
         top_k: int = 5
     ) -> List[Any]:
-        """
-        Reranks the chunks against the query and returns the top_k chunks.
-        Supports both raw LCDocument objects, strings, tuples, etc.
-        """
+        out, scored = self.rerank_scored(query, chunks, top_k)
+        self.last_scored = scored
+        return out
+
+    def rerank_scored(self, query: str, chunks: List[Any], top_k: int = 5) -> Tuple[List[Any], bool]:
+        """Thread-safe variant: returns (results, whether cross-encoder scores were applied)."""
         if not chunks:
-            return []
-
-        # Initialize lazily to avoid loading times on startup if not used
-        self.initialize()
-
-        if not self.enabled or self.reranker is None:
-            # Fallback: return chunks as-is up to top_k
-            return chunks[:top_k]
-
+            return [], False
+        # Candidates arrive best-first from retrieval; cross-encoding is the costliest
+        # CPU step, so only the top RERANK_MAX_CANDIDATES are scored.
+        from app.core.config import settings
+        chunks = chunks[:max(settings.rerank_max_candidates, top_k)]
         try:
-            # Extract texts
-            texts = []
-            for c in chunks:
-                if hasattr(c, 'page_content'):
-                    texts.append(c.page_content)
-                elif isinstance(c, tuple) and len(c) > 0 and hasattr(c[0], 'page_content'):
-                    texts.append(c[0].page_content)
-                elif isinstance(c, dict) and 'content' in c:
-                    texts.append(c['content'])
-                else:
-                    texts.append(str(c))
-
-            # Pairs for cross-encoder
-            pairs = [[query, text] for text in texts]
-            
-            # Predict scores
-            scores = self.reranker.compute_score(pairs)
-            
-            # If scores is a single float (only one chunk), turn it into list
-            if isinstance(scores, (float, int)):
-                scores = [scores]
-
-            # Pair chunks with scores
-            ranked_pairs = list(zip(chunks, scores))
-            # Sort by score descending
-            ranked_pairs.sort(key=lambda x: x[1], reverse=True)
-
-            # Return only the chunks, up to top_k
-            return [chunk for chunk, score in ranked_pairs[:top_k]]
-
+            scores = model_registry.rerank_scores(query, [_text_of(c) for c in chunks])
         except Exception as e:
             print(f"Error in reranking: {e}. Falling back to default order.")
-            return chunks[:top_k]
+            scores = None
+        if scores is None:
+            return chunks[:top_k], False
+
+        ranked = sorted(zip(chunks, scores), key=lambda x: x[1], reverse=True)[:top_k]
+        out = []
+        for chunk, score in ranked:
+            if isinstance(chunk, tuple) and len(chunk) == 2:
+                doc = chunk[0]
+                if hasattr(doc, "metadata"):
+                    doc.metadata["rerank_score"] = round(score, 4)
+                out.append((doc, score))
+            else:
+                out.append(chunk)
+        return out, True
 
     def adaptive_rerank(
         self,

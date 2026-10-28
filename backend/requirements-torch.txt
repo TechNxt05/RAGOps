@@ -1,0 +1,7 @@
+# Optional PyTorch model backend (MODEL_BACKEND=torch): bge-reranker-base and any
+# sentence-transformers embedding model. Needs ~1.5 GB+ RAM; not for 512 MB hosts.
+# Install CPU-only torch first:
+#   pip install torch==2.9.1 --index-url https://download.pytorch.org/whl/cpu
+-r requirements.txt
+sentence-transformers==5.2.0
+langchain-huggingface==0.0.3

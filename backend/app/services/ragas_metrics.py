@@ -239,12 +239,10 @@ class RAGASEvaluator:
             query_coverage = len(q_words & a_words) / len(q_words)
             
             # TF-IDF cosine similarity
-            from sklearn.feature_extraction.text import TfidfVectorizer
-            from sklearn.metrics.pairwise import cosine_similarity
-            
-            vectorizer = TfidfVectorizer(ngram_range=(1, 2), min_df=1)
-            tfidf_matrix = vectorizer.fit_transform([query, answer])
-            tfidf_sim = cosine_similarity(tfidf_matrix[0], tfidf_matrix[1])[0][0]
+            from app.utils.tfidf import cosine, tfidf_vectors
+
+            q_vec, a_vec = tfidf_vectors([query, answer], ngram_range=(1, 2))
+            tfidf_sim = cosine(q_vec, a_vec)
             
             # Bonus for longer, more detailed answers (up to a cap)
             answer_length_bonus = min(0.1, len(a_words) / 200)

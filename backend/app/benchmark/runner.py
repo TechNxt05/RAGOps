@@ -266,6 +266,11 @@ class BenchmarkRunner:
                 self.session_db.add(rag_config)
                 self.session_db.commit()
                 self.session_db.refresh(rag_config)
+                engine._configs[self.project_id] = rag_config
+
+            # Detach so the per-variant overrides below stay local to this run:
+            # they are never autoflushed into (or row-locking) the live project config.
+            self.session_db.expunge(rag_config)
 
             # Override toggles
             rag_config.use_hybrid_search = variant_config.get("use_hybrid_search", True)
@@ -287,38 +292,14 @@ class BenchmarkRunner:
                 if decision.chosen_backend == "bm25":
                     rag_config.use_hybrid_search = False
 
-            # Build LLM client
-            import os as _os
-            primary_model_cfg = getattr(rag_config, "primary_models", [{"provider": "openrouter", "name": "openai/gpt-4o-mini"}])[0]
-            provider = self.provider_override or primary_model_cfg.get("provider", "openrouter")
-            model_name = self.model_override or primary_model_cfg.get("name", "openai/gpt-4o-mini")
-            
-            if provider == "groq":
-                from langchain_groq import ChatGroq
-                llm_client = ChatGroq(
-                    model_name=model_name,
-                    api_key=_os.getenv("GROQ_API_KEY"),
-                    temperature=0.0, # Forced for determinism in benchmarks
-                )
-            elif provider == "openrouter":
-                from langchain_openai import ChatOpenAI
-                api_key = _os.getenv("OPENROUTER_API_KEY")
-                llm_client = ChatOpenAI(
-                    model=model_name,
-                    api_key=api_key,
-                    openai_api_key=api_key,
-                    base_url="https://openrouter.ai/api/v1",
-                    openai_api_base="https://openrouter.ai/api/v1",
-                    temperature=0.0,
-                    max_tokens=300,
-                )
-            else:
-                from langchain_google_genai import ChatGoogleGenerativeAI
-                llm_client = ChatGoogleGenerativeAI(
-                    model=model_name,
-                    google_api_key=_os.getenv("GEMINI_API_KEY"),
-                    temperature=0.0, # Forced for determinism in benchmarks
-                )
+            # Build LLM client (single model, no fallbacks: benchmark runs must be
+            # attributable to exactly one model). Temperature 0 for determinism.
+            from app.services.llm_factory import build_chat_model
+            primary_model_cfg = (getattr(rag_config, "primary_models", None) or [{"provider": "groq", "name": "openai/gpt-oss-20b"}])[0]
+            provider = self.provider_override or primary_model_cfg.get("provider", "groq")
+            model_name = self.model_override or primary_model_cfg.get("name", "openai/gpt-oss-20b")
+            llm_client = build_chat_model(provider, model_name, temperature=0.0,
+                                          max_tokens=300 if provider == "openrouter" else None)
 
             try:
                 search_results = engine.search(
@@ -465,10 +446,8 @@ class BenchmarkRunner:
             )
 
         # Setup versioned semantic cache if the variant uses advanced planning
-        from app.services.cost_control import SemanticCache
-        from app.services.versioned_cache import VersionedSemanticCache
-        base_cache = SemanticCache(threshold=0.70, ttl_seconds=3600)
-        cache = VersionedSemanticCache(base_cache)
+        from app.services.semantic_cache import InMemorySemanticCache
+        cache = InMemorySemanticCache(threshold=0.92)
         enable_cache = config.get("use_semantic_cache", False)
 
         for query in self.queries:

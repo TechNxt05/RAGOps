@@ -163,7 +163,7 @@ export default function ProjectAnalyticsPage() {
                 </CardHeader>
                 <CardContent className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                   {Math.round(data?.hybrid_search_usage_pct ?? 0)}%
-                  <span className="ml-2 text-[10px] font-normal text-muted-foreground">FAISS + BM25</span>
+                  <span className="ml-2 text-[10px] font-normal text-muted-foreground">pgvector + BM25</span>
                 </CardContent>
               </Card>
               <Card className="border-indigo-100 bg-indigo-50/20 dark:border-indigo-950 dark:bg-indigo-950/10">

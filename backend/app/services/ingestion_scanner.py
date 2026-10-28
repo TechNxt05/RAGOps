@@ -40,7 +40,8 @@ class IngestionScanner:
             SecretSeverity.CRITICAL
         ),
         "aws_secret_key": (
-            r"(?:aws[_\-]?secret|aws[_\-]?access)\s*[:=]\s*['\"]?([a-zA-Z0-9/+]{40})",
+            # matches aws_secret_access_key / AWS_SECRET_KEY / aws-access-key etc.
+            r"(?i)aws[_\-]?(?:secret|access)[a-z_\-]*\s*[:=]\s*['\"]?([a-zA-Z0-9/+]{40})",
             SecretSeverity.CRITICAL
         ),
         # PII

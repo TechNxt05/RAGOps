@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   getDocuments,
-  getDocumentStatus,
+  getDocumentsStatus,
+  bulkDeleteDocuments,
   deleteDocument,
   rechunkDocument,
   getDocumentChunksPaged,
@@ -41,6 +42,8 @@ import {
 import { toast } from "sonner";
 import { Eye, FileText, RefreshCw, Trash2, Shield, ShieldAlert, ShieldCheck } from "lucide-react";
 
+const IN_FLIGHT = new Set(["pending", "queued", "parsing", "processing"]);
+
 function formatBytes(n?: number | null) {
   if (n == null || n <= 0) return "—";
   if (n < 1024) return `${n} B`;
@@ -72,10 +75,8 @@ export function DocumentManagerPanel({
   const [rechunkSize, setRechunkSize] = useState(512);
   const [rechunkOverlap, setRechunkOverlap] = useState(50);
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
-  const [polling, setPolling] = useState<Record<number, string>>({});
 
   const refresh = useCallback(async () => {
-    setLoading(true);
     try {
       const data = await getDocuments(projectId, true);
       setDocuments(data);
@@ -91,37 +92,35 @@ export function DocumentManagerPanel({
   }, [refresh]);
 
   useEffect(() => {
-    if (lastUploadedDocId != null && lastUploadedDocId > 0) {
-      setPolling((p) => ({ ...p, [lastUploadedDocId]: "pending" }));
-    }
-  }, [lastUploadedDocId]);
+    if (lastUploadedDocId != null && lastUploadedDocId > 0) void refresh();
+  }, [lastUploadedDocId, refresh]);
 
+  // One batched status poll for every in-flight document (survives reloads and
+  // picks up uploads made elsewhere), instead of one interval per document.
+  const inFlightKey = documents
+    .filter((d) => d.is_active !== false && IN_FLIGHT.has(d.processing_status || ""))
+    .map((d) => d.id)
+    .join(",");
   useEffect(() => {
-    const timers: number[] = [];
-    Object.entries(polling).forEach(([idStr, _]) => {
-      const id = Number(idStr);
-      const t = window.setInterval(async () => {
-        try {
-          const st = await getDocumentStatus(id);
-          if (st.status === "complete" || st.status === "failed") {
-            setPolling((p) => {
-              const next = { ...p };
-              delete next[id];
-              return next;
-            });
-            window.clearInterval(t);
-            void refresh();
-            if (st.status === "failed") toast.error(st.error || "Document processing failed");
-            else toast.success("Document ready");
-          }
-        } catch {
-          /* ignore */
-        }
-      }, 2000);
-      timers.push(t);
-    });
-    return () => timers.forEach((t) => window.clearInterval(t));
-  }, [polling, refresh]);
+    if (!inFlightKey) return;
+    const ids = inFlightKey.split(",").map(Number);
+    const timer = window.setInterval(async () => {
+      try {
+        const statuses = await getDocumentsStatus(projectId, ids);
+        const finished = statuses.filter((s) => !IN_FLIGHT.has(s.status));
+        if (!finished.length) return;
+        finished.forEach((s) => {
+          if (s.status === "complete") toast.success(`${s.filename} is ready (${s.chunk_count ?? 0} chunks)`);
+          else if (s.status === "quarantined") toast.warning(`${s.filename} was quarantined: it contains secrets`);
+          else if (s.status === "failed") toast.error(`${s.filename}: ${s.error || "processing failed"}`);
+        });
+        void refresh();
+      } catch {
+        /* transient: try again on the next tick */
+      }
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [inFlightKey, projectId, refresh]);
 
   const toggleSelect = (id: number) => {
     setSelected((prev) => {
@@ -189,7 +188,6 @@ export function DocumentManagerPanel({
       await rechunkDocument(id, rechunkSize, rechunkOverlap);
       toast.info("Re-chunking started…");
       setRechunkTarget(null);
-      setPolling((p) => ({ ...p, [id]: "processing" }));
       void refresh();
     } catch {
       toast.error("Re-chunk failed");
@@ -198,16 +196,15 @@ export function DocumentManagerPanel({
 
   const bulkDelete = async () => {
     if (selected.size === 0) return;
-    for (const id of selected) {
-      try {
-        await deleteDocument(id);
-      } catch {
-        toast.error(`Failed to delete document ${id}`);
-      }
+    try {
+      const res = await bulkDeleteDocuments(Array.from(selected));
+      if (res.failed.length) toast.error(`${res.failed.length} document(s) could not be deleted`);
+      if (res.deleted.length) toast.success(`Deleted ${res.deleted.length} document(s)`);
+    } catch {
+      toast.error("Bulk delete failed");
     }
     setSelected(new Set());
     void refresh();
-    toast.success("Bulk delete completed");
   };
 
   if (loading) {
@@ -241,7 +238,7 @@ export function DocumentManagerPanel({
         <div className="space-y-3">
           {documents.map((doc) => {
             const active = doc.is_active !== false;
-            const busy = polling[doc.id] != null;
+            const busy = active && IN_FLIGHT.has(doc.processing_status || "");
             return (
               <div
                 key={doc.id}

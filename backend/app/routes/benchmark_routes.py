@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session
 
 from app.db import get_session
-from app.auth.deps import get_optional_current_user
+from app.auth.deps import get_current_admin, get_current_user
 from app.models.user import User
 from app.benchmark.variants import PipelineVariant, list_variants, get_variant_config
 from app.benchmark.model_profiles import get_available_profiles, get_profile_by_id, MODEL_PROFILES
@@ -44,19 +44,19 @@ class BenchmarkStartRequest(BaseModel):
 
 
 @router.get("/models")
-def get_model_profiles():
+def get_model_profiles(_: User = Depends(get_current_user)):
     """Returns all pre-configured 1-click model profiles with provider key status."""
     return {"models": get_available_profiles()}
 
 
 @router.get("/variants")
-def get_pipeline_variants():
+def get_pipeline_variants(_: User = Depends(get_current_user)):
     """Returns all 10 canonical RAG pipeline variants with metadata."""
     return {"variants": list_variants()}
 
 
 @router.get("/datasets")
-def get_benchmark_datasets():
+def get_benchmark_datasets(_: User = Depends(get_current_user)):
     """Returns available benchmark query suites."""
     return {
         "datasets": [
@@ -209,7 +209,7 @@ async def _run_benchmark_job_async(job_id: str, req: BenchmarkStartRequest):
 async def start_benchmark(
     req: BenchmarkStartRequest,
     background_tasks: BackgroundTasks,
-    current_user: Optional[User] = Depends(get_optional_current_user),
+    current_user: User = Depends(get_current_admin),
 ):
     """Starts an asynchronous AutoRAGBench evaluation run."""
     job_id = str(uuid.uuid4())
@@ -250,7 +250,7 @@ async def start_benchmark(
 
 
 @router.get("/status/{job_id}")
-def get_benchmark_status(job_id: str):
+def get_benchmark_status(job_id: str, _: User = Depends(get_current_user)):
     """Poll live progress and recent activity for a running benchmark."""
     job = BENCHMARK_JOBS.get(job_id)
     if not job:
@@ -273,7 +273,7 @@ def get_benchmark_status(job_id: str):
 
 
 @router.get("/results/{job_id}")
-def get_benchmark_results(job_id: str):
+def get_benchmark_results(job_id: str, _: User = Depends(get_current_user)):
     """Retrieve full evaluation metrics, leaderboard, and summaries for a completed job."""
     job = BENCHMARK_JOBS.get(job_id)
     if not job:
@@ -299,7 +299,7 @@ def get_benchmark_results(job_id: str):
 
 
 @router.post("/cancel/{job_id}")
-def cancel_benchmark(job_id: str, current_user: Optional[User] = Depends(get_optional_current_user)):
+def cancel_benchmark(job_id: str, current_user: User = Depends(get_current_admin)):
     """Cancels an active benchmark run."""
     job = BENCHMARK_JOBS.get(job_id)
     if not job:
@@ -311,7 +311,7 @@ def cancel_benchmark(job_id: str, current_user: Optional[User] = Depends(get_opt
 
 
 @router.get("/history")
-def get_benchmark_history():
+def get_benchmark_history(_: User = Depends(get_current_user)):
     """Lists past benchmark report files and cached results."""
     history = []
     # Check in-memory jobs

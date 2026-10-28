@@ -22,8 +22,15 @@ from app.utils.cost import calculate_cost
 from app.services.rag_evaluator import evaluate_rag_response
 
 # Import existing router logic to keep standard mode identical
+from app.auth.access import require_project
+from app.core.config import settings
+from app.core.rate_limit import rate_limiter
 from app.rag.chat_routes import post_message, ChatMessageRequest
 from app.agents import retrieval_agent
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/query", tags=["query"])
 
@@ -62,10 +69,12 @@ async def post_agentic_query(
         if not chat_session or chat_session.user_id != current_user.id:
             raise HTTPException(status_code=404, detail="Session not found")
         project_id = chat_session.project_id
+        require_project(session_db, current_user, project_id)
         is_new_session = False
     else:
         if not project_id:
             raise HTTPException(status_code=400, detail="project_id is required for new session")
+        require_project(session_db, current_user, project_id)
         chat_session = ChatSession(
             user_id=current_user.id,
             title=title or content[:30],
@@ -94,17 +103,13 @@ async def post_agentic_query(
 
     # 1. Cost Control Pre-Call
     cost_manager = get_cost_manager()
-    pre = cost_manager.pre_call(content)
-
-    if pre["source"] == "blocked":
-        raise HTTPException(status_code=503, detail="Cost circuit breaker tripped. Hourly/daily spending limit reached.")
-
-    # Route model dynamically if routed by query router
-    routed_model = pre.get("model", model_name)
-    routed_provider = "google" if "gemini" in routed_model.lower() else "groq"
-    if pre.get("degraded") or routed_model != model_name:
-        model_name = routed_model
-        model_provider = routed_provider
+    rate_limiter.check(f"chat:{current_user.id}", settings.rate_limit_chat_per_min)
+    allowed, _reason = cost_manager.breaker.should_allow()
+    if not allowed:
+        raise HTTPException(status_code=503, detail="Spending limit reached for now. Please try again later.")
+    tier = cost_manager.router.route(content).tier.value
+    model_name = model_name or "openai/gpt-oss-20b"
+    model_provider = model_provider or "groq"
 
     # Get chat history
     past_messages = session_db.exec(
@@ -138,6 +143,7 @@ async def post_agentic_query(
         context_sessions = session_db.exec(
             select(ChatSession)
             .where(ChatSession.project_id == project_id)
+            .where(ChatSession.user_id == current_user.id)
             .where(ChatSession.id != session_id)
             .order_by(ChatSession.created_at.desc())
             .limit(project_context_limit)
@@ -189,8 +195,9 @@ async def post_agentic_query(
         strategies_tried = final_state.get("strategies_tried", [])
         attempts = final_state.get("attempt_count", 0)
         retrieved_results = final_state.get("retrieval_results", [])
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Agent runtime failure: {str(e)}")
+    except Exception:
+        logger.exception("Agentic retrieval failed")
+        raise HTTPException(status_code=500, detail="The retrieval agent failed. Please try again.")
 
     latency_ms = (time.time() - t0_overall) * 1000.0
 
@@ -268,7 +275,7 @@ async def post_agentic_query(
         tokens_used = i_tokens + o_tokens
         cost = calculate_cost(model_name, model_provider, i_tokens, o_tokens)
         
-        cost_manager.post_call(content, answer, cost, pre.get("tier", "standard"))
+        cost_manager.breaker.record_spend(cost, tier)
         
         usage_record = TokenUsage(
             project_id=project_id,

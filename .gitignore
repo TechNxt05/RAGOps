@@ -41,6 +41,7 @@ Thumbs.db
 # FAISS Vector Indices & Binary Cache Stores
 faiss_index/
 backend/faiss_index/
+backend/.models/
 *.faiss
 *.pkl
 
@@ -57,12 +58,13 @@ Results.txt
 logs.txt
 Comparison.txt
 scratch/
-audit_*.py
-scratch_*.py
-check_*.py
-test_*.py
-inspect_*.py
-debug_*.py
+# Ad-hoc scripts at the top of backend/ (real tests live in backend/tests/)
+/backend/audit_*.py
+/backend/scratch_*.py
+/backend/check_*.py
+/backend/inspect_*.py
+/backend/debug_*.py
+.pytest_cache/
 backend/test_*.py
 backend/inspect_*.py
 backend/debug_*.py

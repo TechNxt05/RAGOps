@@ -1,38 +1,29 @@
 from __future__ import annotations
 
-import io
-import math
-import os
-import tempfile
 import hashlib
-from datetime import datetime
-from typing import Optional
+import math
+from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
-from pypdf import PdfReader
-from sqlmodel import Session, select
+from sqlmodel import Session, func, select
 
-from app.auth.deps import get_current_admin, get_current_user
-from app.db import engine, get_session
-from app.models.rag import Chunk, Document, RAGConfig
+from app.auth.access import require_project
+from app.auth.deps import get_current_user
+from app.core.config import settings
+from app.core.rate_limit import rate_limiter
+from app.db import get_session
+from app.jobs import queue
+from app.jobs.tasks import deactivate_document
+from app.models.rag import Chunk, Document, IngestionJob
 from app.models.user import User, UserRole
-from app.rag.engine import RAGEngine
-from app.services.ingestion_scanner import IngestionScanner
-from app.services.docling_parser import DoclingParser
+from app.services.document_parser import check_upload
 
 router = APIRouter(prefix="/rag/ingest", tags=["rag-ingest"])
 
-
-def _process_document_job(doc_id: int) -> None:
-    try:
-        with Session(engine) as session:
-            doc = session.get(Document, doc_id)
-            if not doc:
-                return
-            RAGEngine(session).process_document(doc)
-    except Exception as exc:
-        print(f"Background document processing failed for {doc_id}: {exc}")
+# Statuses meaning "this exact file is already (being) indexed" for de-duplication.
+_LIVE_STATUSES = ("pending", "queued", "parsing", "processing", "complete")
+_UPLOAD_CHUNK = 1024 * 1024
 
 
 class RechunkBody(BaseModel):
@@ -40,177 +31,96 @@ class RechunkBody(BaseModel):
     chunk_overlap: int = Field(default=50, ge=0, le=2048)
 
 
+class BulkIds(BaseModel):
+    doc_ids: List[int] = Field(min_length=1, max_length=500)
+
+
+async def _read_limited(upload: UploadFile, max_bytes: int) -> Optional[bytes]:
+    """Read an upload but stop as soon as it exceeds the limit."""
+    buf = bytearray()
+    while True:
+        chunk = await upload.read(_UPLOAD_CHUNK)
+        if not chunk:
+            return bytes(buf)
+        buf.extend(chunk)
+        if len(buf) > max_bytes:
+            return None
+
+
 @router.post("/upload")
-async def upload_document(
-    background_tasks: BackgroundTasks,
+async def upload_documents(
     project_id: int = Form(...),
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(default=[]),
+    file: Optional[UploadFile] = File(default=None),  # legacy single-file field
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    content = ""
-    filename = file.filename or "upload.txt"
-    page_count: Optional[int] = None
-    raw_bytes = await file.read()
-    
-    # Delta Re-indexing: Check if exact same file is uploaded twice
-    doc_hash = hashlib.sha256(raw_bytes).hexdigest()
-    existing_doc = session.exec(
-        select(Document)
-        .where(Document.project_id == project_id)
-        .where(Document.document_hash == doc_hash)
-        .where(Document.is_active == True)
-    ).first()
-    
-    if existing_doc:
-        return {
-            "message": "Document unchanged, skipping re-index",
-            "doc_id": existing_doc.id,
-            "status": "complete",
-            "delta_index_stats": {
-                "total_chunks": existing_doc.chunk_count or 0,
-                "added": 0,
-                "updated": 0,
-                "deleted": 0,
-                "unchanged": existing_doc.chunk_count or 0,
-                "indexed_at": datetime.utcnow().isoformat()
-            }
-        }
+    """Accept one or many files. Each file is validated, de-duplicated and queued
+    for background parsing + indexing; the response returns immediately with a
+    per-file result. A bad file never fails the whole batch."""
+    require_project(session, current_user, project_id, write=True)
+    rate_limiter.check(f"upload:{current_user.id}", settings.rate_limit_upload_per_min)
 
-    docling_parser = DoclingParser()
-    parsing_method = "basic"
-    parsed_chunks_json = None
-    parsed_res = None
+    uploads = list(files) + ([file] if file is not None else [])
+    if not uploads:
+        raise HTTPException(status_code=400, detail="No files provided")
+    if len(uploads) > settings.max_files_per_upload:
+        raise HTTPException(status_code=400, detail=f"At most {settings.max_files_per_upload} files per upload")
 
-    if filename.lower().endswith(".pdf"):
-        # Write bytes to temp file so Docling can parse it
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-            tmp.write(raw_bytes)
-            tmp_path = tmp.name
-        
-        try:
-            if docling_parser.is_available():
-                parsed_res = docling_parser.parse(tmp_path)
-                parsing_method = parsed_res["parsing_method"]
-                page_count = parsed_res["page_count"]
-                
-                # Reconstruct plain text content
-                content = ""
-                for b in parsed_res["text_blocks"]:
-                    content += b["content"] + "\n"
-                for t in parsed_res["tables"]:
-                    content += t["content"] + "\n"
-                
-                parsed_chunks_json = {"chunks": docling_parser.to_chunks(parsed_res)}
-            else:
-                reader = PdfReader(io.BytesIO(raw_bytes))
-                page_count = len(reader.pages)
-                for page in reader.pages:
-                    content += page.extract_text() + "\n"
-        finally:
-            if os.path.exists(tmp_path):
-                os.remove(tmp_path)
-    else:
-        content = raw_bytes.decode("utf-8", errors="replace")
+    max_bytes = settings.max_upload_mb * 1024 * 1024
+    results = []
+    for upload in uploads:
+        filename = (upload.filename or "upload.txt").replace("\\", "/").split("/")[-1][:255]
+        raw = await _read_limited(upload, max_bytes)
+        error = "File exceeds the size limit" if raw is None else check_upload(filename, len(raw), max_bytes)
+        if error:
+            results.append({"filename": filename, "status": "rejected", "error": error})
+            continue
 
-    # Ingestion PII/Secrets Scanning
-    scanner = IngestionScanner()
-    scan_result = scanner.scan_document(content)
-    
-    action_taken = "none"
-    warning_msg = None
-    redaction_log = None
-    
-    if scanner.should_quarantine(scan_result):
-        # Quarantine critical secret uploads (don't chunk)
+        doc_hash = hashlib.sha256(raw).hexdigest()
+        existing = session.exec(
+            select(Document)
+            .where(Document.project_id == project_id)
+            .where(Document.document_hash == doc_hash)
+            .where(Document.is_active == True)  # noqa: E712
+        ).all()
+        live = next((d for d in existing if d.processing_status in _LIVE_STATUSES), None)
+        if live:
+            results.append({
+                "filename": filename, "doc_id": live.id, "status": "duplicate",
+                "message": f"Identical file already in project as '{live.filename}'",
+            })
+            continue
+        # A previous failed/quarantined copy of this file is superseded by the retry.
+        for old in existing:
+            old.is_active = False
+            session.add(old)
+
         doc = Document(
             filename=filename,
-            content="",  # Blank content
+            content="",
             processed=False,
             project_id=project_id,
-            file_size_bytes=len(raw_bytes),
-            page_count=page_count,
-            processing_status="quarantined",
+            file_size_bytes=len(raw),
+            processing_status="queued",
             uploaded_by=current_user.id,
             document_hash=doc_hash,
-            parsing_method=parsing_method
         )
         session.add(doc)
+        session.flush()
+        queue.enqueue(session, "ingest_file", project_id=project_id, document_id=doc.id,
+                      payload={"filename": filename}, file_bytes=raw, commit=False)
         session.commit()
-        session.refresh(doc)
-        
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "message": "Critical secret detected. Document quarantined.",
-                "doc_id": doc.id,
-                "status": "quarantined",
-                "ingestion_scan": {
-                    "has_secrets": True,
-                    "has_critical_secrets": True,
-                    "total_findings": scan_result["total_findings"],
-                    "findings_by_severity": scan_result["findings_by_severity"],
-                    "action_taken": "quarantined"
-                }
-            }
-        )
-    
-    if scan_result["has_secrets"]:
-        # Redact PII
-        redact_res = scanner.redact_document(content)
-        content = redact_res["redacted_text"]
-        redaction_log = redact_res["redaction_log"]
-        action_taken = "redacted"
-        warning_msg = "Document contained PII which was redacted"
-        
-        if parsed_chunks_json and "chunks" in parsed_chunks_json:
-            for ch in parsed_chunks_json["chunks"]:
-                ch_redact = scanner.redact_document(ch["content"])
-                ch["content"] = ch_redact["redacted_text"]
+        results.append({"filename": filename, "doc_id": doc.id, "status": "queued"})
 
-    file_size = len(raw_bytes) if raw_bytes else len(content.encode("utf-8"))
-
-    doc = Document(
-        filename=filename,
-        content=content,
-        processed=False,
-        project_id=project_id,
-        file_size_bytes=file_size,
-        page_count=page_count,
-        processing_status="pending",
-        uploaded_by=current_user.id,
-        document_hash=doc_hash,
-        parsing_method=parsing_method,
-        redaction_log=redaction_log,
-        parsed_chunks_json=parsed_chunks_json
-    )
-    session.add(doc)
-    session.commit()
-    session.refresh(doc)
-
-    background_tasks.add_task(_process_document_job, doc.id)
-
-    estimated_chunks = parsed_chunks_json["chunks"] if parsed_chunks_json else []
-
+    queued = sum(1 for r in results if r["status"] == "queued")
+    first = next((r for r in results if r.get("doc_id")), {})
     return {
-        "message": warning_msg or "Document queued for processing",
-        "doc_id": doc.id,
-        "status": doc.processing_status,
-        "ingestion_scan": {
-            "has_secrets": scan_result["has_secrets"],
-            "has_critical_secrets": False,
-            "total_findings": scan_result["total_findings"],
-            "findings_by_severity": scan_result["findings_by_severity"],
-            "action_taken": action_taken,
-            "redaction_count": len(redaction_log) if redaction_log else 0
-        },
-        "parsing_stats": {
-            "parsing_method": parsing_method,
-            "page_count": page_count or 0,
-            "table_count": len(parsed_res["tables"]) if parsed_res and "tables" in parsed_res else 0,
-            "heading_count": len(parsed_res["headings"]) if parsed_res and "headings" in parsed_res else 0,
-            "chunk_count": len(estimated_chunks) if estimated_chunks else 0
-        }
+        "message": f"{queued} of {len(results)} file(s) queued for processing",
+        "results": results,
+        # Legacy single-file response fields
+        "doc_id": first.get("doc_id"),
+        "status": first.get("status"),
     }
 
 
@@ -221,10 +131,46 @@ def list_documents(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
+    require_project(session, current_user, project_id)
     q = select(Document).where(Document.project_id == project_id)
     if not (include_inactive and current_user.role == UserRole.ADMIN):
-        q = q.where(Document.is_active == True)
-    return session.exec(q.order_by(Document.uploaded_at.desc())).all()
+        q = q.where(Document.is_active == True)  # noqa: E712
+    docs = session.exec(q.order_by(Document.uploaded_at.desc())).all()
+    # Full text and parse artefacts can be megabytes; the list view doesn't need them.
+    return [d.model_copy(update={"content": None, "parsed_chunks_json": None}) for d in docs]
+
+
+@router.get("/status")
+def get_documents_status(
+    project_id: int,
+    doc_ids: str,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Batched status poll: ?doc_ids=1,2,3 (one request for the whole upload queue)."""
+    require_project(session, current_user, project_id)
+    ids = [int(x) for x in doc_ids.split(",") if x.strip().isdigit()][:500]
+    if not ids:
+        return {"documents": []}
+    docs = session.exec(
+        select(Document).where(Document.id.in_(ids)).where(Document.project_id == project_id)
+    ).all()
+    return {"documents": [
+        {
+            "doc_id": d.id, "filename": d.filename, "status": d.processing_status,
+            "error": d.processing_error, "processed": d.processed, "chunk_count": d.chunk_count,
+            "ingestion_scan": d.ingestion_scan,
+        }
+        for d in docs
+    ]}
+
+
+def _doc_for_user(session: Session, user: User, doc_id: int, write: bool = False) -> Document:
+    doc = session.get(Document, doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    require_project(session, user, doc.project_id, write=write)
+    return doc
 
 
 @router.get("/documents/{doc_id}/status")
@@ -233,13 +179,12 @@ def get_document_status(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    doc = session.get(Document, doc_id)
-    if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
+    doc = _doc_for_user(session, current_user, doc_id)
     return {
         "status": doc.processing_status,
         "error": doc.processing_error,
         "processed": doc.processed,
+        "ingestion_scan": doc.ingestion_scan,
     }
 
 
@@ -251,12 +196,14 @@ def get_document_chunks_page(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    all_chunks = session.exec(select(Chunk).where(Chunk.document_id == doc_id)).all()
-    total_count = len(all_chunks)
-    offset = max(0, (page - 1) * limit)
-    chunks = all_chunks[offset : offset + limit]
+    _doc_for_user(session, current_user, doc_id, write=True)
+    limit = max(1, min(limit, 200))
+    page = max(1, page)
+    total_count = session.exec(select(func.count(Chunk.id)).where(Chunk.document_id == doc_id)).one()
+    chunks = session.exec(
+        select(Chunk).where(Chunk.document_id == doc_id).order_by(Chunk.chunk_index, Chunk.id)
+        .offset((page - 1) * limit).limit(limit)
+    ).all()
     return {
         "chunks": [
             {"id": c.id, "content": c.content, "token_count": max(1, len(c.content) // 4)}
@@ -264,7 +211,7 @@ def get_document_chunks_page(
         ],
         "total": total_count,
         "page": page,
-        "pages": max(1, math.ceil(total_count / limit)) if limit else 1,
+        "pages": max(1, math.ceil(total_count / limit)),
     }
 
 
@@ -272,67 +219,77 @@ def get_document_chunks_page(
 def delete_document(
     doc_id: int,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_admin),
+    current_user: User = Depends(get_current_user),
 ):
-    doc = session.get(Document, doc_id)
-    if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
-    doc.is_active = False
-    session.add(doc)
+    doc = _doc_for_user(session, current_user, doc_id, write=True)
+    deactivate_document(session, doc)
     session.commit()
-    RAGEngine(session).rebuild_full_index()
     return {"deleted": True, "doc_id": doc_id}
 
 
-def _rechunk_job(doc_id: int, chunk_size: int, chunk_overlap: int) -> None:
-    with Session(engine) as session:
-        doc = session.get(Document, doc_id)
-        if not doc or not doc.content:
-            return
-        old_chunks = session.exec(select(Chunk).where(Chunk.document_id == doc_id)).all()
-        for ch in old_chunks:
-            session.delete(ch)
-        session.commit()
-
-        active = session.exec(
-            select(RAGConfig)
-            .where(RAGConfig.project_id == doc.project_id)
-            .where(RAGConfig.is_active == True)
-            .order_by(RAGConfig.created_at.desc())
-        ).first()
-        if active:
-            active.chunk_size = chunk_size
-            active.chunk_overlap = chunk_overlap
-            session.add(active)
-            session.commit()
-
-        doc.processed = False
-        doc.processing_status = "pending"
-        doc.processing_error = None
-        doc.version = (doc.version or 1) + 1
-        session.add(doc)
-        session.commit()
-
-        RAGEngine(session).rebuild_full_index()
-        RAGEngine(session).process_document(doc)
+@router.post("/documents/bulk-delete")
+def bulk_delete_documents(
+    body: BulkIds,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    deleted, failed = [], []
+    for doc_id in body.doc_ids:
+        try:
+            doc = _doc_for_user(session, current_user, doc_id, write=True)
+            deactivate_document(session, doc)
+            deleted.append(doc_id)
+        except HTTPException as exc:
+            failed.append({"doc_id": doc_id, "error": exc.detail})
+    session.commit()
+    return {"deleted": deleted, "failed": failed}
 
 
 @router.post("/documents/{doc_id}/rechunk")
 def rechunk_document(
     doc_id: int,
-    background_tasks: BackgroundTasks,
     body: RechunkBody,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_admin),
+    current_user: User = Depends(get_current_user),
 ):
-    doc = session.get(Document, doc_id)
-    if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
+    doc = _doc_for_user(session, current_user, doc_id, write=True)
     if not doc.is_active:
         raise HTTPException(status_code=400, detail="Cannot re-chunk inactive document")
-
-    background_tasks.add_task(_rechunk_job, doc_id, body.chunk_size, body.chunk_overlap)
-    doc.processing_status = "processing"
+    if body.chunk_overlap >= body.chunk_size:
+        raise HTTPException(status_code=400, detail="chunk_overlap must be smaller than chunk_size")
+    doc.processing_status = "queued"
     session.add(doc)
+    queue.enqueue(session, "reindex_document", project_id=doc.project_id, document_id=doc.id,
+                  payload={"chunk_size": body.chunk_size, "chunk_overlap": body.chunk_overlap, "force_rechunk": True},
+                  commit=False)
     session.commit()
     return {"status": "reprocessing", "doc_id": doc_id}
+
+
+@router.post("/projects/{project_id}/reindex")
+def reindex_project(
+    project_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Re-embed every chunk of a project (e.g. after changing its embedding model)."""
+    require_project(session, current_user, project_id, write=True)
+    job = queue.enqueue(session, "reindex_project", project_id=project_id)
+    return {"status": "queued", "job_id": job.id}
+
+
+@router.get("/jobs")
+def list_jobs(
+    project_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    require_project(session, current_user, project_id, write=True)
+    jobs = session.exec(
+        select(IngestionJob).where(IngestionJob.project_id == project_id).order_by(IngestionJob.id.desc()).limit(50)
+    ).all()
+    return [
+        {"id": j.id, "kind": j.kind, "status": j.status, "document_id": j.document_id,
+         "attempts": j.attempts, "error": j.error, "created_at": j.created_at, "updated_at": j.updated_at}
+        for j in jobs
+    ]

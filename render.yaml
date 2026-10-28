@@ -1,0 +1,46 @@
+# Render Blueprint for the RAGOps backend on the FREE plan (512 MB RAM, 0.1 CPU).
+# Database: Neon free (Postgres + pgvector). Frontend: Vercel.
+# See DEPLOY_RENDER.md for the step-by-step guide.
+services:
+  - type: web
+    name: ragops-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    # Models are downloaded at build time into ./.models (ONNX, no PyTorch).
+    buildCommand: pip install -r requirements.txt && python download_models.py
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1 --proxy-headers --forwarded-allow-ips "*" --timeout-keep-alive 75
+    # /ping never touches the database, so Neon can scale to zero between questions.
+    healthCheckPath: /ping
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ENVIRONMENT
+        value: production
+      - key: MODEL_BACKEND
+        value: onnx
+      - key: MODEL_CACHE_DIR
+        value: ./.models
+      - key: HF_HUB_OFFLINE
+        value: "1"
+      - key: MALLOC_ARENA_MAX
+        value: "2"
+      - key: WORKER_THREADS
+        value: "1"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false

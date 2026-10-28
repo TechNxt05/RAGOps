@@ -219,7 +219,7 @@ class QueryRouter:
     DEFAULT_MODEL_MAP = {
         ModelTier.SIMPLE: "gemini-2.5-flash",      # Cheapest
         ModelTier.STANDARD: "gemini-2.5-pro",       # Mid
-        ModelTier.COMPLEX: "gemini-ultra",           # Best (use sparingly)
+        ModelTier.COMPLEX: "gemini-2.5-pro",         # Best (use sparingly)
     }
     
     def __init__(

@@ -60,7 +60,7 @@ class RuntimeState(BaseModel):
     quality_target: float = Field(default=0.85, ge=0.0, le=1.0)
 
     selected_retrieval_backend: str = "hybrid"
-    selected_model: str = "groq/llama3-70b-8192"
+    selected_model: str = "groq/openai/gpt-oss-20b"
     selected_context_strategy: str = "standard"
 
     retry_count: int = 0

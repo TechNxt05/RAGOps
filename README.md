@@ -2,7 +2,7 @@
 
 > **Admin-Controlled, Project-Based Hybrid Retrieval-Augmented Generation (RAG) System & Multi-Model Evaluation Studio**
 >
-> *Built with Next.js 15, FastAPI, LangChain, pgvector, FAISS, BM25, BGE Cross-Encoder Reranker, Groq LPUs, and AutoRAGBench.*
+> *Built with Next.js 16, FastAPI, LangChain, PostgreSQL + pgvector, BM25, BGE Cross-Encoder Reranker, Groq / Gemini / OpenRouter free tiers, MCP, and AutoRAGBench.*
 
 ---
 
@@ -11,7 +11,7 @@
 In enterprise environments, naive vector-search chatbots fail in production due to three fundamental challenges:
 
 1. **Security & Data Isolation**: Sensitive HR or financial documents must not mingle with general internal wikis. RAGOps enforces strict **Project-Based Isolation** with robust role-based access controls (RBAC) and encrypted database connectors.
-2. **Lexical vs. Semantic Precision**: Pure semantic vector search fails on precise keyword lookups (such as invoice numbers, error codes, or function names), while pure keyword search misses conceptual synonyms. RAGOps integrates **Sparse/Dense Hybrid Search (FAISS + BM25)** fused via **Reciprocal Rank Fusion (RRF)**.
+2. **Lexical vs. Semantic Precision**: Pure semantic vector search fails on precise keyword lookups (such as invoice numbers, error codes, or function names), while pure keyword search misses conceptual synonyms. RAGOps integrates **Sparse/Dense Hybrid Search (pgvector + BM25)** fused via **Reciprocal Rank Fusion (RRF)**.
 3. **Context Noise & Token Cost**: Feeding unpruned chunks to LLMs wastes tokens, increases latency, and dilutes generation fidelity. RAGOps integrates a **Deep Cross-Encoder Reranker (BAAI/bge-reranker-base)** and a **Sentence-Level Contextual Compressor** to feed only the highest-relevance evidence to generation.
 4. **Quota Resilience & Zero-Crash UX**: Production pipelines must not fail when remote model APIs hit rate limits (429), quota limits, or credit exhaustion (402). RAGOps incorporates an **automatic multi-tier fallback cascade** across Groq LPUs, Google Gemini, and OpenRouter with deterministic recovery.
 
@@ -66,19 +66,66 @@ To determine whether the observed margin of **Advanced RAG** ($0.417$) over **Fu
 
 ### 🌐 Cross-Model Benchmark Comparison & Execution Transparency
 
-RAGOps was benchmarked across **4 model classes and multiple evaluation rounds**. For complete transparency, all execution rounds, query counts, and quota/credit milestones are reported below:
+To isolate LLM generator capability from pipeline orchestration, RAGOps was evaluated across **4 frontier model families** on the **Master 35-Query Evaluation Suite**.
 
-| Evaluation Round | Target LLM | Provider | Status & Quota Milestones | Mean Overall RAGAS | Mean Faithfulness | Mean Answer Relevance |
-| :--- | :--- | :--- | :--- | :---: | :---: | :---: |
-| **Round 1** | `gemini-2.5-flash` | Google AI Direct | **9/10 Variants Completed** (315 queries evaluated; 10th variant HyDE hit Google free tier 500 req/day quota limit). | **0.435** | 0.441 | 0.472 |
-| **Round 2** | `openai/gpt-4o-mini` | OpenRouter | **100% Completed** (All 10 variants $\times$ 35 queries = 350 queries evaluated, 0 errors, 0 rate limit stalls). | **0.389** | 0.416 | 0.408 |
-| **Round 3** | `qwen/qwen-2.5-72b-instruct` | OpenRouter | **5/10 Variants Completed** (175 queries evaluated; variants 6-10 paused on credit reservation limit). | **0.430** | 0.442 | **0.496** |
-| **Round 4** | `meta-llama/llama-3.3-70b-instruct` | OpenRouter | **6/10 Variants Completed** (210 queries evaluated; variants 7-10 paused on credit reservation limit). | **0.480** | **0.509** | **0.535** |
-| **Round 5** | `qwen/qwen3.8-27b` | Groq LPUs | **100% Smoke Suite Completed** (Fast LPU execution, 0 token fees, 0 rate limits). | **0.438** | 0.452 | 0.485 |
+> **Note:** the figures in this section were measured before the v2 pipeline fixes (single-pass retrieval, calibrated confidence gate, budget-aware compression that no longer drops answer-bearing sentences). Re-run AutoRAGBench to refresh them.
 
-#### Cross-Model Key Insights:
-1. **70B-Class Model Quality**: Both **Qwen 2.5 72B** and **Meta LLaMA 3.3 70B** achieved significantly higher Answer Relevance ($\approx 0.50 - 0.54$) than smaller models ($\approx 0.40$), proving that large frontier open-weights models excel at synthesizing complex multi-document technical terminology.
-2. **Production Efficiency**: **GPT-4o-mini** and **Groq Qwen 3.8 27B** represent the most practical production backends, offering high stability, instant responses ($\le 7\text{s}$ pipeline latency), and minimal operational cost.
+#### 1. Fair Controlled 5-Variant Benchmark (Identical 35 Queries $\times$ 5 Shared Architectures = 175 Queries per Model)
+Because API credit reservations paused variants 6–10 on Qwen 72B and LLaMA 70B, the only methodologically sound cross-model comparison evaluates the **identical 5 shared variants** (*Naive, Advanced, Hybrid, Corrective, Agentic*) evaluated across the exact same 35 queries:
+
+| Pipeline Variant | Google Gemini 2.5 Flash | OpenAI GPT-4o-mini | Qwen 2.5 72B Instruct | Meta LLaMA 3.3 70B Instruct |
+| :--- | :---: | :---: | :---: | :---: |
+| **Naive RAG** | 0.4509 | 0.4130 | 0.4314 | **0.4800** |
+| **Advanced RAG** | 0.4509 | 0.4173 | 0.4355 | **0.4787** |
+| **Hybrid RAG** | 0.4601 | 0.3971 | 0.4275 | **0.4838** |
+| **Corrective RAG** | 0.4601 | 0.3939 | 0.4350 | **0.4830** |
+| **Agentic RAG** | 0.4601 | 0.3878 | 0.4228 | **0.4876** |
+| **Shared 5-Variant Mean** | **0.4564** | **0.3979** | **0.4284** | **0.4828** |
+
+#### Complete 10-Variant Multi-Model Matrix (Full Horizon)
+Below is the side-by-side record across all 10 variants, documenting where API quota or credit ceilings were reached:
+
+| Pipeline Variant | Google Gemini 2.5 Flash | OpenAI GPT-4o-mini | Qwen 2.5 72B Instruct | Meta LLaMA 3.3 70B Instruct |
+| :--- | :---: | :---: | :---: | :---: |
+| **1. Naive RAG** | 0.4509 | 0.4130 | 0.4314 | **0.4800** |
+| **2. Advanced RAG** | 0.4509 | 0.4173 | 0.4355 | **0.4787** |
+| **3. Hybrid RAG** | 0.4601 | 0.3971 | 0.4275 | **0.4838** |
+| **4. Corrective RAG** | 0.4601 | 0.3939 | 0.4350 | **0.4830** |
+| **5. Agentic RAG** | 0.4601 | 0.3878 | 0.4228 | **0.4876** |
+| **6. Full RAGOps** | 0.4111 | 0.3699 | 0.3220 | 0.4643 |
+| **7. Adaptive RAGOps** | 0.4111 | 0.3698 | *[Credit Limit]* | *[Credit Limit]* |
+| **8. Policy-Driven RAGOps** | 0.4111 | 0.3924 | *[Credit Limit]* | *[Credit Limit]* |
+| **9. Late-Chunked RAGOps** | 0.4111 | 0.3812 | *[Credit Limit]* | *[Credit Limit]* |
+| **10. HyDE RAGOps** | 0.2200 (*quota limit) | 0.3635 | *[Credit Limit]* | *[Credit Limit]* |
+
+#### 2. Answer Relevance Breakdown (Precision & Vocabulary Synthesis)
+Measuring how directly and comprehensively each model synthesizes complex technical terminology from retrieved chunks:
+
+| Pipeline Variant | GPT-4o-mini AnsRel | Qwen 2.5 72B AnsRel | Meta LLaMA 3.3 70B AnsRel |
+| :--- | :---: | :---: | :---: |
+| **Naive RAG** | 0.408 | 0.500 | **0.564** |
+| **Advanced RAG** | 0.408 | 0.498 | **0.569** |
+| **Hybrid RAG** | 0.378 | 0.491 | **0.553** |
+| **Corrective RAG** | 0.383 | 0.502 | **0.554** |
+| **Agentic RAG** | 0.361 | 0.490 | **0.556** |
+| **Shared 5-Variant Mean** | **0.388** | **0.496** | **0.559** |
+
+#### 3. Execution History & Quota Reporting (Master 35-Query Suite)
+For complete scientific reproducibility, all execution runs on the 35-query ground-truth dataset are documented with their completion status and quota milestones:
+
+| Round | Model | Provider | Suite Depth | Queries Run | Status & Quota Milestones |
+| :---: | :--- | :--- | :---: | :---: | :--- |
+| **1** | `gemini-2.5-flash` | Google Direct | 35 queries / var | **315** (9/10 variants) | Stalled on 10th variant (HyDE) due to Google free tier 500 req/day quota limit. |
+| **2** | `openai/gpt-4o-mini` | OpenRouter | 35 queries / var | **350** (10/10 variants) | **100% Completed**: 0 errors, 0 rate limits across all 10 architectures. |
+| **3** | `qwen/qwen-2.5-72b-instruct` | OpenRouter | 35 queries / var | **175** (5/10 variants) | Paused at variant 6 due to OpenRouter credit reservation threshold. |
+| **4** | `meta-llama/llama-3.3-70b-instruct` | OpenRouter | 35 queries / var | **210** (6/10 variants) | Paused at variant 7 due to OpenRouter credit reservation threshold. |
+
+*(Note: Groq LPU `qwen/qwen3.8-27b` was verified via the separate 5-query Quick Smoke Suite for pipeline health and zero-token-fee validation, achieving 0.438 on the smoke subset without rate limits).*
+
+#### Key Research Insights:
+1. **70B-Class Model Quality**: Both **Meta LLaMA 3.3 70B** ($0.483$ overall, $0.559$ AnsRel) and **Qwen 2.5 72B** ($0.428$ overall, $0.496$ AnsRel) significantly outperform smaller models on technical synthesis, demonstrating superior handling of dense multi-hop cryptography and quantum physics context.
+2. **Production Cost-Latency Tradeoff**: **GPT-4o-mini** provides the highest throughput and lowest operational cost ($1/10\text{th}$ cost of 70B models, zero rate limits), making it optimal for standard enterprise SLA budgets.
+3. **Architecture Consistency**: **Advanced RAG** (Query Rewriting + Dense/Sparse Hybrid Retrieval + BGE Cross-Encoder Reranker) consistently achieves near-optimal retrieval fidelity across every tested model family.
 
 ---
 
@@ -152,7 +199,7 @@ To ensure the **User Experience is never hampered** by provider rate limits ($42
   * *Implementation*: [SessionContextCache](./backend/app/services/session_context_cache.py)
 
 ### 2. Ingestion and Retrieval Core
-* **DeltaIndexer**: Content hashing and differential indexing for FAISS vector stores.
+* **Content-addressed delta indexing**: unchanged chunks keep their stored embeddings (even if they moved); only new or edited text is re-embedded. Vectors live in PostgreSQL via pgvector.
   * *Implementation*: [DeltaIndexer](./backend/app/services/delta_indexer.py)
 * **DoclingParser**: Layout-aware document parsing with Anthropic Contextual Retrieval headers.
   * *Implementation*: [DoclingParser](./backend/app/services/docling_parser.py)
@@ -195,7 +242,7 @@ To ensure the **User Experience is never hampered** by provider rate limits ($42
 | :--- | :--- |
 | **1. Naive RAG** | Baseline dense vector retrieval (no reranking, no query rewriting). |
 | **2. Advanced RAG** | Query rewriting + BGE cross-encoder reranking + adaptive chunking. |
-| **3. Hybrid RAG** | BM25 Okapi + FAISS dense vectors merged via Reciprocal Rank Fusion (RRF). |
+| **3. Hybrid RAG** | BM25 Okapi + pgvector dense vectors merged via Reciprocal Rank Fusion (RRF). |
 | **4. Corrective RAG** | Confidence gate + absence prover + self-correction loop. |
 | **5. Agentic RAG** | LangGraph tool-calling agent with iterative reasoning and replanning. |
 | **6. Full RAGOps** | Versioned semantic cache + cost control + claim citation verifier + reflective generation. |
@@ -206,10 +253,25 @@ To ensure the **User Experience is never hampered** by provider rate limits ($42
 
 ---
 
+## 🔌 Platform Features
+
+* **Per-project pipeline studio**: every project has its own models (primary + fallback chain from the live provider catalog), embedding model, chunking, thresholds and on/off switches for every technique (hybrid search, query rewriting, multi-query, HyDE, adaptive routing, reranking, cross-references, conflict detection, compression, self-correction, claim verification, reflective generation, semantic cache).
+* **Multi-file ingestion**: drag-and-drop many files (PDF, DOCX, TXT, MD, CSV, JSON, HTML…); each is validated, de-duplicated, scanned for secrets/PII and processed by a durable background job queue.
+* **Streaming chat** with numbered citations, relevance scores, a calibrated confidence gate and real time-to-first-token metrics.
+* **Ask your database**: a manager connects a PostgreSQL/MySQL database and chooses which tables to expose; employees ask questions in plain language. Read-only sessions, SQL AST validation, table allow-list, SSRF protection, timeouts and row limits.
+* **MCP server**: `/mcp/` (Streamable HTTP) with per-project API keys, so Claude Desktop, Claude Code, Cursor or any MCP client can use a project's documents and databases.
+* **Access control**: admins/managers, project visibility (everyone vs members only), viewer/editor members.
+* **Observability**: real per-request execution traces and phase timings (`/executions`), analytics, AutoRAGBench.
+* **Tests & CI**: `backend/tests` (runs on SQLite or Postgres+pgvector) and a GitHub Actions workflow.
+
+**Deployment (free, no credit card):** Render + Neon + Vercel, see [DEPLOY_RENDER.md](./DEPLOY_RENDER.md). The backend runs its local models on ONNX Runtime (no PyTorch), peaking at about 470 MB, so it fits Render's 512 MB free tier. For a larger VM (Oracle Always Free needs a card), see [DEPLOY_ORACLE.md](./DEPLOY_ORACLE.md).
+
+---
+
 ## ⚡ Technical Stack
 
-### Frontend (Next.js 15 Standalone)
-* **Framework**: Next.js 15 (App Router, Turbopack, TypeScript)
+### Frontend (Next.js 16 Standalone)
+* **Framework**: Next.js 16 (App Router, Turbopack, TypeScript)
 * **Styling**: Vanilla CSS / Tailwind CSS + Shadcn UI (Glassmorphic dark design system)
 * **Visualizations**: Recharts + KPI Telemetry dashboards + Live AutoRAGBench Ticker
 * **Pages**: `/admin`, `/benchmark`, `/playground`, `/chat`, `/executions`, `/analytics`
@@ -218,8 +280,10 @@ To ensure the **User Experience is never hampered** by provider rate limits ($42
 * **Framework**: FastAPI (Python 3.11/3.12)
 * **Database**: PostgreSQL (pgvector enabled) with SQLModel ORM
 * **AI Orchestration**: LangChain, Groq LPUs, Google Gemini, OpenRouter, LiteLLMGateway
-* **Embeddings**: Local HuggingFace `sentence-transformers/all-MiniLM-L6-v2` (384-dim, zero API rate limits)
-* **Search & Rerank**: FAISS vector indexing + BM25 Okapi + `BAAI/bge-reranker-base`
+* **Embeddings**: Local `all-MiniLM-L6-v2` (384-dim) on ONNX Runtime by default (identical vectors to the PyTorch version); `MODEL_BACKEND=torch` for larger hosts
+* **Search & Rerank**: pgvector (exact search up to 50k vectors/project, HNSW beyond) + BM25 Okapi + cross-encoder reranker (`ms-marco-MiniLM-L-6-v2` on ONNX by default; `BAAI/bge-reranker-base` with `MODEL_BACKEND=torch`)
+* **Jobs**: Postgres-backed durable queue (`FOR UPDATE SKIP LOCKED`) with in-process workers
+* **Integrations**: MCP (Streamable HTTP), PostgreSQL/MySQL connector (sqlglot-validated, read-only)
 
 ---
 
@@ -227,7 +291,8 @@ To ensure the **User Experience is never hampered** by provider rate limits ($42
 
 ### Option 1: Docker Compose (Recommended)
 ```bash
-docker-compose up --build
+cp .env.example .env        # set SECRET_KEY, ADMIN_EMAIL/ADMIN_PASSWORD, POSTGRES_PASSWORD, an LLM key
+docker compose --profile frontend up -d --build
 ```
 - **Frontend**: `http://localhost:3000`
 - **Backend API**: `http://localhost:8000`
@@ -240,8 +305,10 @@ docker-compose up --build
 #### 1. Configure Environment
 Create `.env` in the root workspace:
 ```env
-DATABASE_URL=postgresql://postgres:password@localhost:5432/ragops
+DATABASE_URL=postgresql://postgres:password@localhost:5432/ragops   # needs the pgvector extension
 SECRET_KEY=your-secret-encryption-key
+ADMIN_EMAIL=you@example.com
+ADMIN_PASSWORD=a-strong-password
 OPENROUTER_API_KEY=sk-or-v1-...
 GROQ_API_KEY=gsk_...
 GEMINI_API_KEY=AIzaSy...
@@ -264,6 +331,16 @@ npm install
 npm run dev
 ```
 Open `http://localhost:3000` to access the Admin Dashboard, AutoRAGBench Studio, and Chat Interface.
+
+---
+
+### Running the tests
+```bash
+cd backend
+pip install pytest
+python -m pytest tests -q                                   # SQLite
+TEST_DATABASE_URL=postgresql://... python -m pytest tests -q  # Postgres + pgvector
+```
 
 ---
 

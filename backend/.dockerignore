@@ -4,6 +4,26 @@ __pycache__/
 *.pyc
 *.pyo
 *.db
-faiss_index/
+*.db-journal
 .env
+.env.*
 .git/
+faiss_index/
+data/
+tests/
+.pytest_cache/
+# local scratch / benchmark artefacts
+benchmark_report*.json
+*.partial.json
+*benchmark_*out*.txt
+diff_output.txt
+scratch*.py
+audit_*.py
+check_*.py
+debug_*.py
+inspect_*.py
+test_*.py
+compute_*.py
+paired_*.py
+rebuild_*.py
+run_*_benchmark.py

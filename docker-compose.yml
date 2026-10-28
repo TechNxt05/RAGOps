@@ -1,62 +1,93 @@
-version: '3.8'
+# Production stack for a single VM (e.g. Oracle Cloud Always Free ARM).
+#
+#   cp .env.example .env      # then fill in the values
+#   docker compose up -d --build
+#   docker compose --profile tunnel up -d     # + public HTTPS via Cloudflare Tunnel
+#
+# The frontend is normally hosted on Vercel / Cloudflare Pages; add
+# `--profile frontend` to also run it here.
 
 services:
   db:
-    image: pgvector/pgvector:pg16
-    container_name: ragops-db
-    restart: always
+    image: pgvector/pgvector:0.8.7-pg17
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: ragops
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-ragops}
+      POSTGRES_USER: ${POSTGRES_USER:-ragops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    # Only reachable from this machine (for backups / psql), never from the internet.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d ragops"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    container_name: ragops-backend
-    restart: always
+      args:
+        MODEL_BACKEND: ${MODEL_BACKEND:-onnx}       # torch = bge-reranker-base (needs ~2 GB RAM)
+        INSTALL_DOCLING: ${INSTALL_DOCLING:-false}
+        BAKE_EMBEDDING_MODELS: ${BAKE_EMBEDDING_MODELS:-all-MiniLM-L6-v2}
+    restart: unless-stopped
+    env_file: .env
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/ragops
-      - SECRET_KEY=XYZ1234567
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - GROQ_API_KEY=${GROQ_API_KEY}
+      # Use the bundled Postgres unless DATABASE_URL is set in .env (e.g. Neon).
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-ragops}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-ragops}}
+      ENVIRONMENT: production
     ports:
-      - "8000:8000"
-    volumes:
-      - faiss_data:/app/faiss_index
+      - "127.0.0.1:8000:8000"
     depends_on:
       db:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+
+  # Public HTTPS with an automatic Let's Encrypt certificate (free).
+  # Needs ports 80/443 open and API_DOMAIN pointing at this VM (e.g. a free DuckDNS name).
+  caddy:
+    image: caddy:2.11.7-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      API_DOMAIN: ${API_DOMAIN:-}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+
+  # Alternative to caddy when you own a domain on Cloudflare (no open ports needed).
+  tunnel:
+    image: cloudflare/cloudflared:2026.10.5
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - backend
 
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
-    container_name: ragops-frontend
-    restart: always
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    profiles: ["frontend"]
+    restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       - backend
 
 volumes:
   pgdata:
-  faiss_data:
+  caddy_data:
+  caddy_config:

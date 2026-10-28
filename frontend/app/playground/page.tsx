@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card';
 import { Send, Bot, User as UserIcon, Trash2, Zap, Settings2, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { api } from '@/lib/api';
+import { api, getModelCatalog } from '@/lib/api';
 
 interface Message {
     role: 'user' | 'assistant' | 'system';
@@ -21,7 +21,11 @@ export default function PlaygroundPage() {
     // Config State
     const [systemPrompt, setSystemPrompt] = useState("You are a helpful AI assistant.");
     const [modelProvider, setModelProvider] = useState("groq");
-    const [modelName, setModelName] = useState("llama-3.3-70b-versatile");
+    const [modelName, setModelName] = useState("openai/gpt-oss-20b");
+    const [catalog, setCatalog] = useState<Record<string, string[]>>({});
+    useEffect(() => {
+        getModelCatalog().then(setCatalog).catch(() => setCatalog({}));
+    }, []);
     const [temperature, setTemperature] = useState([0.7]);
     const [maxTokens, setMaxTokens] = useState([1000]);
 
@@ -92,12 +96,13 @@ export default function PlaygroundPage() {
                             value={modelProvider}
                             onChange={(e) => {
                                 setModelProvider(e.target.value);
-                                if (e.target.value === 'google') setModelName('gemini-1.5-flash');
-                                else setModelName('llama-3.3-70b-versatile');
+                                const first = catalog[e.target.value]?.[0];
+                                if (first) setModelName(first);
                             }}
                         >
-                            <option value="google">Google Gemini</option>
-                            <option value="groq">Groq</option>
+                            {(Object.keys(catalog).length ? Object.keys(catalog) : ['groq', 'google']).map((p) => (
+                                <option key={p} value={p}>{p}</option>
+                            ))}
                         </select>
                     </div>
 
@@ -108,17 +113,8 @@ export default function PlaygroundPage() {
                             value={modelName}
                             onChange={(e) => setModelName(e.target.value)}
                         >
-                            {modelProvider === 'google' ? (
-                                <>
-                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                                </>
-                            ) : (
-                                <>
-                                    <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
-                                    <option value="llama-3.1-8b-instant">Llama 3.1 8B</option>
-                                </>
-                            )}
+                            {!(catalog[modelProvider] || []).includes(modelName) && <option value={modelName}>{modelName}</option>}
+                            {(catalog[modelProvider] || []).map((m) => <option key={m} value={m}>{m}</option>)}
                         </select>
                     </div>
 

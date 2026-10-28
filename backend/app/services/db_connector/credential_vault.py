@@ -13,8 +13,8 @@ from cryptography.fernet import Fernet
 
 
 def _get_fernet_key() -> bytes:
-    raw_secret = os.getenv("SECRET_KEY", "ragops-default-development-secret-key-change-in-production")
-    key_hash = hashlib.sha256(raw_secret.encode("utf-8")).digest()
+    from app.core.config import settings
+    key_hash = hashlib.sha256(settings.secret_key.encode("utf-8")).digest()
     return base64.urlsafe_b64encode(key_hash)
 
 
@@ -25,6 +25,9 @@ class CredentialVault:
 
     def encrypt(self, plaintext: str) -> str:
         """Encrypt plaintext credential / password."""
+        from app.core.config import settings
+        if not settings.secret_key_configured:
+            raise RuntimeError("SECRET_KEY must be set before database credentials can be stored.")
         if not plaintext:
             return ""
         return self.cipher.encrypt(plaintext.encode("utf-8")).decode("utf-8")

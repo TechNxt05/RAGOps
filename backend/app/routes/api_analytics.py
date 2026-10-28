@@ -315,3 +315,36 @@ def get_project_analytics(
         "avg_cache_savings_usd": round(avg_cache_savings, 2),
     }
 
+
+
+@router.get("/{project_id}/executions")
+def list_executions(
+    project_id: int,
+    limit: int = 50,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_admin),
+) -> list[dict[str, Any]]:
+    """Recent real pipeline executions (one per answered question) for the trace viewer."""
+    rows = session.exec(
+        select(QueryLog).where(QueryLog.project_id == project_id)
+        .order_by(QueryLog.created_at.desc()).limit(max(1, min(limit, 200)))
+    ).all()
+    out = []
+    for r in rows:
+        trace = r.pipeline_trace or {}
+        out.append({
+            "id": r.id,
+            "query": r.query_text,
+            "answer": r.response_text,
+            "model": r.model_used,
+            "status": trace.get("status", "success"),
+            "latency_ms": r.latency_ms,
+            "ttft_ms": r.ttft_ms,
+            "chunks_retrieved": r.chunks_retrieved,
+            "tokens_used": r.tokens_used,
+            "backend": r.adaptive_backend_used,
+            "faithfulness": r.faithfulness_score,
+            "created_at": r.created_at,
+            "trace": trace,
+        })
+    return out

@@ -7,6 +7,22 @@ instead of a plain string. This utility normalizes both formats.
 """
 
 
+def extract_delta(content) -> str:
+    """Text of a streaming chunk, WITHOUT stripping: token deltas carry their
+    own leading/trailing spaces and newlines."""
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            str(item.get("text", "")) if isinstance(item, dict) else str(item)
+            for item in content
+            if not isinstance(item, dict) or item.get("type", "text") == "text"
+        )
+    return str(content)
+
+
 def extract_text(content) -> str:
     """
     Extract plain text from an LLM response content field.

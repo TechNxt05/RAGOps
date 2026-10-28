@@ -69,7 +69,8 @@ Return ONLY the queries, one per line, no numbering, no explanation."""
                 score = item[1] if isinstance(item, tuple) else 0.0
                 
                 meta = getattr(doc, "metadata", {}) or {}
-                chunk_id = meta.get("doc_id_version") or meta.get("doc_id") or doc.page_content[:100]
+                # Never key on doc_id alone: that would merge every chunk of a document.
+                chunk_id = meta.get("chunk_id") or meta.get("doc_id_version") or doc.page_content[:500]
                 
                 chunk_scores[chunk_id] += 1.0 / (k + rank)
                 chunk_data[chunk_id] = (doc, score)

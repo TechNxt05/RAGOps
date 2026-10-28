@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import {
-    getProjects, createProject, getRAGConfig, updateRAGConfig, uploadDocument, getDocuments,
+    getProjects, createProject, getRAGConfig, getDocuments,
     getDocumentChunks, debugSearch, deleteProject, compareModels,
     Project, RAGConfig, Document, Chunk, DebugSearchResult, type CompareModelsResponse,
 } from '@/lib/api';
@@ -25,7 +25,11 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ModelOrchestrator } from '@/components/ModelOrchestrator';
 import { DocumentManagerPanel } from '@/components/DocumentManagerPanel';
 import { BenchmarkStudio } from '@/components/BenchmarkStudio';
-import { Sparkles } from 'lucide-react';
+import { DocumentUploader } from '@/components/DocumentUploader';
+import { ProjectAccessPanel } from '@/components/ProjectAccessPanel';
+import { DatabasesPanel } from '@/components/DatabasesPanel';
+import { ApiKeysPanel } from '@/components/ApiKeysPanel';
+import { Sparkles, Users } from 'lucide-react';
 
 export default function AdminDashboard() {
     const { user, logout, isLoading } = useAuth();
@@ -125,25 +129,6 @@ export default function AdminDashboard() {
         } catch (e) { toast.error("Failed to load config"); }
     };
 
-    const handleSaveConfig = async () => {
-        if (!selectedProject) return;
-        try {
-            await updateRAGConfig({ ...config, project_id: selectedProject.id });
-            toast.success("Configuration saved for " + selectedProject.name);
-        } catch (e) { toast.error("Failed to save config"); }
-    };
-
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!selectedProject || !e.target.files) return;
-        const file = e.target.files[0];
-        try {
-            toast.info("Uploading to " + selectedProject.name + "...");
-            const res = await uploadDocument(selectedProject.id, file);
-            setLastUploadedDocId(res.doc_id);
-            toast.success("Document queued for processing");
-            refreshDocuments();
-        } catch (e) { toast.error("Upload failed."); }
-    };
 
     const handleFetchChunks = async (docId: string) => {
         if (!docId) return;
@@ -326,111 +311,12 @@ export default function AdminDashboard() {
                                 <TabsTrigger value="files" className="gap-2"><FileText className="w-4 h-4" /> Knowledge Base</TabsTrigger>
                                 <TabsTrigger value="inspector" className="gap-2"><Database className="w-4 h-4" /> Knowledge Inspector</TabsTrigger>
                                 <TabsTrigger value="benchmark" className="gap-2"><Sparkles className="w-4 h-4 text-indigo-400" /> AutoRAGBench</TabsTrigger>
+                                <TabsTrigger value="access" className="gap-2"><Users className="w-4 h-4" /> Access &amp; Integrations</TabsTrigger>
                             </TabsList>
 
                             {/* CONFIG TAB */}
                             <TabsContent value="config">
                                 <ErrorBoundary section="RAG configuration">
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>RAG Settings</CardTitle>
-                                        <CardDescription>Configure Generation, Retrieval, and Safety parameters.</CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="space-y-8">
-                                        {/* Retrieval Section */}
-                                        <div className="space-y-4">
-                                            <div className="flex items-center gap-2 border-b pb-2">
-                                                <h3 className="text-lg font-semibold">Retrieval Configuration</h3>
-                                                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">Core</span>
-                                            </div>
-
-                                            <div className="grid gap-8 md:grid-cols-2">
-                                                <div className="space-y-2">
-                                                    <Label>Chunk Size (Tokens)</Label>
-                                                    <Input type="number" value={config.chunk_size} onChange={(e) => setConfig({ ...config, chunk_size: parseInt(e.target.value) })} />
-                                                    <SettingInfo text="Characters per chunk. Smaller chunks are more precise, larger capture more context." recommend="1000 for standard docs." />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label>Chunk Overlap</Label>
-                                                    <Input type="number" value={config.chunk_overlap} onChange={(e) => setConfig({ ...config, chunk_overlap: parseInt(e.target.value) })} />
-                                                    <SettingInfo text="Duplicate characters at edges to preserve context between chunks." recommend="10-20% of Chunk Size (e.g. 200)." />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <div className="flex justify-between"><Label>Top K: {config.top_k}</Label></div>
-                                                    <Slider value={[config.top_k || 4]} max={20} step={1} onValueChange={(v) => setConfig({ ...config, top_k: v[0] })} />
-                                                    <SettingInfo text="Number of document chunks to retrieve and feed to the AI." recommend="3-5. Too many = expensive/confusing." />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <div className="flex justify-between"><Label>Similarity Threshold: {config.similarity_threshold}</Label></div>
-                                                    <Slider value={[config.similarity_threshold || 0]} max={1} step={0.05} onValueChange={(v) => setConfig({ ...config, similarity_threshold: v[0] })} />
-                                                    <SettingInfo text="Minimum relevance score (0.0=Any, 1.0=Exact Match). Filters out noise." recommend="0.5 for strict, 0.0 for broad." />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Generation Section */}
-                                        <div className="space-y-4">
-                                            <div className="flex items-center gap-2 border-b pb-2">
-                                                <h3 className="text-lg font-semibold">LLM Generation</h3>
-                                                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">Model</span>
-                                            </div>
-
-                                            <div className="grid gap-8 md:grid-cols-2">
-                                                <div className="space-y-2">
-                                                    <div className="flex justify-between"><Label>Temperature: {config.temperature}</Label></div>
-                                                    <Slider value={[config.temperature || 0.7]} max={1} step={0.1} onValueChange={(v) => setConfig({ ...config, temperature: v[0] })} />
-                                                    <SettingInfo text="Controls randomness. 0.0 is deterministic/factual, 1.0 is creative." recommend="0.0 - 0.3 for RAG/Fact-finding." />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <div className="flex justify-between"><Label>Top P: {config.top_p}</Label></div>
-                                                    <Slider value={[config.top_p || 0.9]} max={1} step={0.05} onValueChange={(v) => setConfig({ ...config, top_p: v[0] })} />
-                                                    <SettingInfo text="Nucleus sampling. limits vocabulary to top probability mass." recommend="0.9 is standard." />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label>Response Style</Label>
-                                                    <select className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                                                        value={config.response_style || "Concise"}
-                                                        onChange={(e) => setConfig({ ...config, response_style: e.target.value })}
-                                                    >
-                                                        <option value="Concise">Concise - Short & Direct</option>
-                                                        <option value="Detailed">Detailed - Deep explanation</option>
-                                                        <option value="Step-by-step">Step-by-step - Good for tutorials</option>
-                                                        <option value="Academic">Academic - Formal tone</option>
-                                                    </select>
-                                                    <SettingInfo text="Injects specific instructions into the System Prompt." recommend="Concise for quick answers." />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label>Max Output Tokens</Label>
-                                                    <Input type="number" value={config.max_output_tokens} onChange={(e) => setConfig({ ...config, max_output_tokens: parseInt(e.target.value) })} />
-                                                    <SettingInfo text="Maximum length of the generated response." recommend="1024 (approx 750 words)." />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Safety Section */}
-                                        <div className="space-y-4">
-                                            <div className="flex items-center gap-2 border-b pb-2">
-                                                <h3 className="text-lg font-semibold">Safety & Governance</h3>
-                                                <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">Guardrails</span>
-                                            </div>
-                                            <div className="grid gap-6 md:grid-cols-2">
-                                                <div className="border p-4 rounded-lg space-y-3">
-                                                    <div className="flex items-center justify-between"><Label className="font-semibold">Strict Retrieval Mode</Label><Switch checked={config.answer_only_from_docs} onCheckedChange={(c) => setConfig({ ...config, answer_only_from_docs: c })} /></div>
-                                                    <SettingInfo text="If checked, AI will refuse to answer if information is not found in docs." recommend="ON for compliance/enterprise use." />
-                                                </div>
-                                                <div className="border p-4 rounded-lg space-y-3">
-                                                    <div className="flex items-center justify-between"><Label className="font-semibold">Hallucination Guard</Label><Switch checked={config.hallucination_guard} onCheckedChange={(c) => setConfig({ ...config, hallucination_guard: c })} /></div>
-                                                    <SettingInfo text="Checks response against context to ensure factual accuracy (Extra latency)." recommend="OFF unless accuracy is critical." />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="pt-4">
-                                            <Button size="lg" onClick={handleSaveConfig} className="w-full font-semibold">Save All Configurations</Button>
-                                            <p className="text-center text-xs text-muted-foreground mt-2">Changes apply immediately to new chat sessions.</p>
-                                        </div>
-                                    </CardContent>
-                                </Card>
                                 <div className="mt-6 space-y-6">
                                     <ErrorBoundary section="Model orchestration">
                                         {selectedProject && <ModelOrchestrator projectId={selectedProject.id} />}
@@ -486,17 +372,16 @@ export default function AdminDashboard() {
                                 <Card>
                                     <CardHeader>
                                         <CardTitle>Upload Documents</CardTitle>
-                                        <CardDescription>Upload PDF or Text files to be indexed for this project.</CardDescription>
+                                        <CardDescription>Upload many files at once. Each is parsed, scanned for secrets, chunked and indexed in the background.</CardDescription>
                                     </CardHeader>
                                     <CardContent>
-                                        <div className="p-12 border-2 border-dashed rounded-lg flex flex-col items-center justify-center text-center space-y-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
-                                            <Upload className="w-10 h-10 text-slate-400" />
-                                            <div className="text-muted-foreground">
-                                                <p>Drag & drop or Click to Upload</p>
-                                                <p className="text-sm">Supported: PDF, TXT</p>
-                                            </div>
-                                            <Input type="file" onChange={handleFileUpload} className="max-w-xs cursor-pointer" />
-                                        </div>
+                                        {selectedProject && (
+                                            <DocumentUploader
+                                                projectId={selectedProject.id}
+                                                onUploaded={() => { refreshDocuments(); setLastUploadedDocId(Date.now()); }}
+                                            />
+                                        )}
+                                        <div className="h-6" />
 
                                         <ErrorBoundary section="Documents">
                                             {selectedProject && (
@@ -895,6 +780,18 @@ export default function AdminDashboard() {
                             </TabsContent>
 
                             {/* AUTORAGBENCH TAB */}
+                            {/* ACCESS & INTEGRATIONS TAB */}
+                            <TabsContent value="access" className="mt-6 space-y-6">
+                                <ErrorBoundary section="Access control">
+                                    <ProjectAccessPanel
+                                        project={selectedProject}
+                                        onProjectChange={(p) => { setSelectedProject(p); setProjects((list) => list.map((x) => (x.id === p.id ? p : x))); }}
+                                    />
+                                </ErrorBoundary>
+                                <ErrorBoundary section="Databases"><DatabasesPanel projectId={selectedProject.id} /></ErrorBoundary>
+                                <ErrorBoundary section="API keys"><ApiKeysPanel projectId={selectedProject.id} /></ErrorBoundary>
+                            </TabsContent>
+
                             <TabsContent value="benchmark" className="mt-6">
                                 <ErrorBoundary section="AutoRAGBench Studio">
                                     <BenchmarkStudio projectId={selectedProject.id} />

@@ -13,18 +13,20 @@ import time
 class ChunkConfidence:
     chunk_id: str
     chunk_text: str
-    retrieval_score: float      # From reranker (0-1)
+    retrieval_score: float      # Relevance probability (cross-encoder sigmoid or cosine), 0-1
     freshness_score: float      # Based on document age
     authority_score: float      # Based on document type/source trust
     agreement_score: float      # Agreement with other retrieved chunks
     
     @property
     def confidence(self) -> float:
+        # Relevance dominates: a highly relevant chunk from an old .txt file is
+        # still strong evidence; freshness/authority/agreement only nudge it.
         return (
-            self.retrieval_score * 0.50 +
-            self.freshness_score * 0.20 +
-            self.authority_score * 0.20 +
-            self.agreement_score * 0.10
+            self.retrieval_score * 0.85 +
+            self.freshness_score * 0.05 +
+            self.authority_score * 0.05 +
+            self.agreement_score * 0.05
         )
 
 @dataclass
@@ -36,7 +38,7 @@ class ConfidenceGateResult:
     refusal_reason: Optional[str]       # Why generation was refused
     chunk_confidences: List[ChunkConfidence]
 
-CONFIDENCE_THRESHOLD = 0.65             # From paper recommendation
+CONFIDENCE_THRESHOLD = 0.40             # Calibrated default (relevant >= 0.44, irrelevant <= 0.09); per-project override
 AUTHORITY_SCORES = {
     "pdf": 0.8,
     "docx": 0.75,
@@ -58,7 +60,7 @@ class SourceConfidenceGate:
     def evaluate(
         self,
         chunks: List[dict],             # Retrieved chunks with metadata
-        reranker_scores: List[float],   # BGE reranker scores (aligned with chunks)
+        reranker_scores: List[float],   # Calibrated relevance in [0, 1] (aligned with chunks)
         document_metadata: List[dict],  # File type, upload date per chunk
     ) -> ConfidenceGateResult:
         
@@ -67,10 +69,9 @@ class SourceConfidenceGate:
         for i, (chunk, rerank_score) in enumerate(zip(chunks, reranker_scores)):
             meta = document_metadata[i] if i < len(document_metadata) else {}
             
-            # Retrieval score: normalize reranker score to 0-1
-            # Reranker score is usually a float, sometimes positive/negative (e.g. -2.5 to 5.0)
-            # Let's map it safely
-            retrieval_score = max(0.0, min(1.0, (rerank_score + 10) / 20))
+            # Callers pass calibrated relevance in [0, 1] (cross-encoder sigmoid,
+            # or cosine similarity when the reranker is disabled).
+            retrieval_score = max(0.0, min(1.0, float(rerank_score)))
             
             # Freshness: documents uploaded recently score higher
             upload_date = meta.get("upload_date")

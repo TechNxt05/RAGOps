@@ -1,4 +1,4 @@
-from langchain_core.pydantic_v1 import BaseModel
+from pydantic import BaseModel
 from app.mcp.schemas import MCPContext
 from app.db import engine
 from sqlmodel import Session, select

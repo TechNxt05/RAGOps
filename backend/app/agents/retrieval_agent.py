@@ -5,16 +5,14 @@ from sqlmodel import select
 from langgraph.graph import StateGraph, END
 
 # Import existing services & helpers
-from app.services.bm25_service import bm25_manager
 from app.services.rrf_service import hybrid_search_merge
-from app.services.context_pruner import context_pruner
 from app.services.reranker_service import reranker_service
-from app.services.confidence_gate import get_confidence_gate
 from app.services.query_understanding import get_query_understanding
 from app.rag.engine import RAGEngine
 
 class AgentState(TypedDict, total=False):
     query: str
+    confidence_threshold: float          # project's calibrated gate threshold
     query_type: str                     # from existing Query Understanding
     project_id: str
     attempt_count: int                  # starts at 0
@@ -93,81 +91,27 @@ def execute_retrieval(state: AgentState, config: dict = None) -> dict:
             similarity_threshold=0.0,
             use_hybrid_search=True,
             semantic_weight=0.7,
-            embedding_model="huggingface"
         )
-    embeddings = rag_engine._get_embeddings(rag_config)
-    
-    # Load vector store from disk
-    import os
-    from langchain_community.vectorstores import FAISS
-    if os.path.exists("faiss_index"):
-        vector_store = FAISS.load_local(
-            "faiss_index", embeddings, allow_dangerous_deserialization=True
-        )
-    else:
-        vector_store = None
-        
-    inactive = rag_engine._inactive_doc_ids(project_id)
-    
     candidate_k = max(rag_config.top_k * 5, 20)
     semantic_results = []
     bm25_results = []
     used_hybrid = False
-    
-    if vector_store:
-        if strategy == "semantic":
-            # Semantic search only
-            results = vector_store.similarity_search_with_score(
-                query, k=candidate_k, filter={"project_id": project_id}
-            )
-            for doc, score in results:
-                did = doc.metadata.get("doc_id")
-                if did is not None and int(did) in inactive:
-                    continue
-                semantic_results.append((doc, score))
-                
-        elif strategy == "hybrid":
-            # Semantic + BM25 hybrid search
-            results = vector_store.similarity_search_with_score(
-                query, k=candidate_k, filter={"project_id": project_id}
-            )
-            for doc, score in results:
-                did = doc.metadata.get("doc_id")
-                if did is not None and int(did) in inactive:
-                    continue
-                semantic_results.append((doc, score))
-                
-            if bm25_manager.index_exists(str(project_id)):
-                bm25_results = bm25_manager.search(str(project_id), query, top_k=candidate_k)
-                used_hybrid = True
-                
-        elif strategy == "decomposed":
-            # Search multiple sub-queries from query understanding stage
-            seen_semantic = set()
-            seen_bm25 = set()
-            for sub_q in sub_queries:
-                # Semantic subquery search
-                sub_res = vector_store.similarity_search_with_score(
-                    sub_q, k=candidate_k // 2, filter={"project_id": project_id}
-                )
-                for doc, score in sub_res:
-                    did = doc.metadata.get("doc_id")
-                    if did is not None and int(did) in inactive:
-                        continue
-                    if doc.page_content not in seen_semantic:
-                        seen_semantic.add(doc.page_content)
-                        semantic_results.append((doc, score))
-                
-                # BM25 subquery search (if hybrid configured or default)
-                if bm25_manager.index_exists(str(project_id)):
-                    sub_bm25 = bm25_manager.search(str(project_id), sub_q, top_k=candidate_k // 2)
-                    for text, score in sub_bm25:
-                        if text not in seen_bm25:
-                            seen_bm25.add(text)
-                            bm25_results.append((text, score))
+
+    if strategy == "decomposed":
+        seen = set()
+        for sub_q in sub_queries:
+            for doc, score in rag_engine._single_hybrid_search(sub_q, project_id, max(candidate_k // 2, 10)):
+                key = doc.metadata.get("chunk_id") or doc.page_content
+                if key not in seen:
+                    seen.add(key)
+                    semantic_results.append((doc, score))
+        used_hybrid = True
+    else:
+        semantic_results = rag_engine.semantic_search(query, project_id, candidate_k)
+        if strategy == "hybrid":
+            bm25_results = rag_engine.keyword_search(query, project_id, candidate_k)
             used_hybrid = True
 
-    # RRF Hybrid Merge
     if used_hybrid and bm25_results:
         merged_results = hybrid_search_merge(
             semantic_results=semantic_results,
@@ -177,50 +121,15 @@ def execute_retrieval(state: AgentState, config: dict = None) -> dict:
         )
     else:
         merged_results = semantic_results
-        
-    # fast TF-IDF Context Pruning
-    prune_threshold = max(rag_config.similarity_threshold or 0.0, 0.1)
-    pruned_results, orig_count, pruned_count, reduction_pct = context_pruner.prune(
-        query=query,
-        chunks=merged_results,
-        threshold=prune_threshold
-    )
-    
-    # BGE Cross-Encoder Reranking
-    final_reranked = reranker_service.rerank(
-        query=query,
-        chunks=pruned_results,
-        top_k=rag_config.top_k
-    )
-    
-    # Prepare inputs for Source Confidence evaluation
-    doc_ids = list(set(int(doc.metadata.get("doc_id")) for doc, _ in final_reranked if doc.metadata.get("doc_id") is not None))
-    doc_meta_map = {}
-    if doc_ids:
-        from app.models.rag import Document as DBDocument
-        docs = session.exec(select(DBDocument).where(DBDocument.id.in_(doc_ids))).all()
-        for d in docs:
-            doc_meta_map[d.id] = {
-                "file_type": d.filename.split(".")[-1] if "." in d.filename else "unknown",
-                "upload_date": d.uploaded_at
-            }
-            
-    chunk_dicts = []
-    reranker_scores = []
-    document_metadata = []
-    for doc, score in final_reranked:
-        did = doc.metadata.get("doc_id")
-        meta = doc_meta_map.get(did, {}) if did else {}
-        chunk_dicts.append({
-            "id": str(did or ""),
-            "text": doc.page_content
-        })
-        reranker_scores.append(score)
-        document_metadata.append(meta)
-        
-    confidence_gate = get_confidence_gate(threshold=0.65)
-    gate_result = confidence_gate.evaluate(chunk_dicts, reranker_scores, document_metadata)
-    
+
+    orig_count = len(merged_results)
+    final_reranked, scored = reranker_service.rerank_scored(query, merged_results, rag_config.top_k)
+    relevance = rag_engine.relevance_scores(query, final_reranked, rag_config, scored)
+    final_reranked = [(doc, rel) for (doc, _), rel in zip(final_reranked, relevance)]
+    pruned_count = len(final_reranked)
+    reduction_pct = round(100.0 * (1 - pruned_count / orig_count), 2) if orig_count else 0.0
+    gate_result = rag_engine.evaluate_confidence(final_reranked, rag_config)
+
     # Format results for state
     formatted_results = []
     for doc, score in final_reranked:
@@ -246,7 +155,8 @@ def execute_retrieval(state: AgentState, config: dict = None) -> dict:
         "context": context_str,
         "_temp_latency": latency_ms,
         "_temp_gate_passed": gate_result.passed,
-        "_temp_refusal_reason": gate_result.refusal_reason
+        "_temp_refusal_reason": gate_result.refusal_reason,
+        "confidence_threshold": float(getattr(rag_config, "confidence_threshold", 0.4) or 0.4),
     }
 
 
@@ -259,7 +169,7 @@ def evaluate_confidence(state: AgentState) -> dict:
     
     agent_trace = list(state.get("agent_trace", []))
     
-    if confidence >= 0.75:
+    if confidence >= state.get("confidence_threshold", 0.4):
         action = "Generated response"
     elif attempt < 3:
         action = "Replanning..."
@@ -313,7 +223,7 @@ def generate_response(state: AgentState, config: dict = None) -> dict:
     context = state["context"]
     
     model_provider = configurable.get("model_provider", "groq")
-    model_name = configurable.get("model_name", "llama3-70b-8192")
+    model_name = configurable.get("model_name")
     temperature = configurable.get("temperature", 0.1)
     chat_history = configurable.get("chat_history", [])
     other_context_str = configurable.get("other_context_str", "")
@@ -325,23 +235,14 @@ def generate_response(state: AgentState, config: dict = None) -> dict:
     except Exception:
         style = "Concise"
         
-    # Setup LLM based on user selection
-    import os
-    if model_provider == "groq":
-        from langchain_groq import ChatGroq
-        llm = ChatGroq(
-            model_name=model_name,
-            api_key=os.getenv("GROQ_API_KEY"),
-            temperature=temperature,
-        )
-    else:
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        llm = ChatGoogleGenerativeAI(
-            model=model_name,
-            google_api_key=os.getenv("GEMINI_API_KEY"),
-            temperature=temperature,
-        )
-        
+    from app.services.llm_factory import build_with_fallbacks, model_chain
+    try:
+        cfg = rag_engine.get_active_config(project_id)
+    except Exception:
+        cfg = None
+    preferred = {"provider": model_provider, "name": model_name} if model_name else None
+    llm, _ = build_with_fallbacks(model_chain(cfg, preferred), temperature=temperature)
+
     system_prompt = f"""You are a helpful AI assistant.
     Current Project ID: {project_id}.
     Response Style: {style}.
@@ -364,8 +265,9 @@ def generate_response(state: AgentState, config: dict = None) -> dict:
     messages.append(HumanMessage(content=query))
     
     try:
+        from app.utils.llm_response import extract_text
         response_msg = llm.invoke(messages)
-        response_text = response_msg.content
+        response_text = extract_text(response_msg.content)
     except Exception as e:
         response_text = f"Error during response generation: {str(e)}"
         
@@ -405,7 +307,7 @@ workflow.add_edge("execute_retrieval", "evaluate_confidence")
 def route_after_evaluation(state: AgentState):
     confidence = state.get("confidence_score", 0.0)
     attempt = state.get("attempt_count", 0)
-    if confidence >= 0.75:
+    if confidence >= state.get("confidence_threshold", 0.4):
         return "generate"
     elif attempt < 3:
         return "replan"

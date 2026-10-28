@@ -1,104 +1,106 @@
-import pickle
-import os
 import re
-from pathlib import Path
-from typing import List, Optional, Tuple
+import threading
+from typing import Dict, List, Optional, Set, Tuple
+
+from sqlmodel import Session, select
+
+from app.models.rag import Chunk, Document
+
+
+class _ProjectIndex:
+    __slots__ = ("bm25", "chunk_ids", "doc_ids", "sources")
+
+    def __init__(self, bm25, chunk_ids: List[int], doc_ids: List[int], sources: List[str]):
+        self.bm25 = bm25
+        self.chunk_ids = chunk_ids
+        self.doc_ids = doc_ids
+        self.sources = sources
+
 
 class BM25IndexManager:
     """
-    Manages per-project BM25 indexes alongside existing FAISS indexes.
-    Each project has its own BM25 index stored as a pickle file.
-    Mirrors the FAISS per-project isolation pattern.
+    Per-project BM25 (Okapi) index built from the chunk table.
+
+    Indexes are cached in memory keyed by (project_id, kb_version). Every write to
+    a project's knowledge base bumps kb_version, so stale indexes are never served
+    and there is no pickle file on disk to go missing on an ephemeral filesystem.
     """
 
-    def __init__(self, index_dir: str = "faiss_index"):
-        self.index_dir = Path(index_dir)
-        self.index_dir.mkdir(exist_ok=True)
-        self._cache: dict[str, any] = {}
-        self._corpus_cache: dict[str, list[str]] = {}
+    def __init__(self):
+        self._cache: Dict[int, Tuple[int, Optional[_ProjectIndex]]] = {}
+        self._lock = threading.Lock()
 
-    def _index_path(self, project_id: str) -> Path:
-        return self.index_dir / f"bm25_{project_id}.pkl"
-
-    def _tokenize(self, text: str) -> list[str]:
+    @staticmethod
+    def _tokenize(text: str) -> List[str]:
         """Simple tokenizer — lowercase, split on non-alphanumeric."""
         return re.findall(r'\b\w+\b', text.lower())
 
-    def build_index(self, project_id: str, chunks: list[str]) -> None:
-        """
-        Build BM25 index from document chunks.
-        Called after FAISS index is built — same trigger point.
-        """
+    def _build(self, session: Session, project_id: int) -> Optional[_ProjectIndex]:
         from rank_bm25 import BM25Okapi
-        tokenized = [self._tokenize(chunk) for chunk in chunks]
-        bm25 = BM25Okapi(tokenized)
-
-        # Save to disk
-        with open(self._index_path(project_id), 'wb') as f:
-            pickle.dump({"bm25": bm25, "corpus": chunks}, f)
-
-        # Update cache
-        self._cache[project_id] = bm25
-        self._corpus_cache[project_id] = chunks
-
-    def load_index(self, project_id: str) -> Optional[Tuple[any, list[str]]]:
-        """Load BM25 index from disk (with in-memory cache)."""
-        if project_id in self._cache:
-            return self._cache[project_id], self._corpus_cache[project_id]
-
-        path = self._index_path(project_id)
-        if not path.exists():
+        rows = session.exec(
+            select(Chunk.id, Chunk.content, Document.id, Document.filename)
+            .join(Document, Chunk.document_id == Document.id)
+            .where(Document.project_id == project_id)
+            .where(Document.is_active == True)  # noqa: E712
+            .where(Document.processed == True)  # noqa: E712
+            .order_by(Chunk.id)
+        ).all()
+        if not rows:
             return None
+        bm25 = BM25Okapi([self._tokenize(r[1]) for r in rows])
+        return _ProjectIndex(bm25, [r[0] for r in rows], [r[2] for r in rows], [r[3] for r in rows])
 
-        try:
-            with open(path, 'rb') as f:
-                data = pickle.load(f)
-            self._cache[project_id] = data["bm25"]
-            self._corpus_cache[project_id] = data["corpus"]
-            return data["bm25"], data["corpus"]
-        except Exception:
-            return None
+    def get(self, session: Session, project_id: int, kb_version: int) -> Optional[_ProjectIndex]:
+        cached = self._cache.get(project_id)
+        if cached and cached[0] == kb_version:
+            return cached[1]
+        with self._lock:
+            cached = self._cache.get(project_id)
+            if cached and cached[0] == kb_version:
+                return cached[1]
+            index = self._build(session, project_id)
+            self._cache[project_id] = (kb_version, index)
+            return index
 
     def search(
         self,
-        project_id: str,
+        session: Session,
+        project_id: int,
+        kb_version: int,
         query: str,
-        top_k: int = 20
-    ) -> list[Tuple[str, float]]:
-        """
-        BM25 search. Returns list of (chunk_text, bm25_score).
-        Returns empty list if no index exists for project.
-        """
-        result = self.load_index(project_id)
-        if result is None:
+        top_k: int = 20,
+        document_id: Optional[int] = None,
+        sources: Optional[Set[str]] = None,
+    ) -> List[Tuple[int, float]]:
+        """Return [(chunk_id, bm25_score)] best-first. Chunks with no term overlap
+        (score 0) are not returned: they carry no lexical evidence."""
+        index = self.get(session, project_id, kb_version)
+        if index is None:
             return []
+        tokens = self._tokenize(query)
+        if not tokens:
+            return []
+        scores = index.bm25.get_scores(tokens)
+        ranked = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+        out: List[Tuple[int, float]] = []
+        for i in ranked:
+            if scores[i] <= 0:
+                break
+            if document_id is not None and index.doc_ids[i] != document_id:
+                continue
+            if sources is not None and index.sources[i] not in sources:
+                continue
+            out.append((index.chunk_ids[i], float(scores[i])))
+            if len(out) >= top_k:
+                break
+        return out
 
-        bm25, corpus = result
-        tokenized_query = self._tokenize(query)
-        scores = bm25.get_scores(tokenized_query)
-
-        # Get top_k indices by score
-        top_indices = sorted(
-            range(len(scores)),
-            key=lambda i: scores[i],
-            reverse=True
-        )[:top_k]
-
-        return [(corpus[i], float(scores[i])) for i in top_indices]
-
-    def delete_index(self, project_id: str) -> None:
-        """Delete BM25 index when project is deleted or re-chunked."""
-        path = self._index_path(project_id)
-        if path.exists():
-            try:
-                path.unlink()
-            except Exception:
-                pass
+    def invalidate(self, project_id: int) -> None:
         self._cache.pop(project_id, None)
-        self._corpus_cache.pop(project_id, None)
 
-    def index_exists(self, project_id: str) -> bool:
-        return self._index_path(project_id).exists()
+    # Backwards-compatible no-ops for callers of the old pickle-based API.
+    def delete_index(self, project_id) -> None:
+        self.invalidate(int(project_id))
 
 
 # Singleton instance

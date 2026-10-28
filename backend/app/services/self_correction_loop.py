@@ -32,9 +32,6 @@ class SelfCorrectionPolicy:
         Executes one retry of query rewrite -> search -> rerank -> confidence gate.
         Returns (new_chunks, new_gate_result) if new confidence is better than old, else None.
         """
-        if old_confidence < 0.35:
-            logger.info("Confidence below 0.35, skipping self-correction.")
-            return None
 
         if not getattr(rag_config, "enable_self_correction", True):
             logger.info("Self-correction disabled in project config.")
@@ -63,47 +60,31 @@ class SelfCorrectionPolicy:
         candidate_k = max(top_k_override * 5, 20)
 
         queries_used = [retry_query]
-        if use_mq:
-            mq_retriever = MultiQueryRetriever(self.llm, self.hybrid_search, n_queries=3)
-            retrieval_res = mq_retriever.retrieve(retry_query, project_id, candidate_k, use_multi_query=True)
-            merged_results = retrieval_res["chunks"]
-            queries_used = retrieval_res["queries_used"]
-        else:
-            merged_results = self.hybrid_search(retry_query, project_id, candidate_k)
 
-        # Apply BGE Reranker
-        final_reranked = reranker_service.rerank(
-            query=retry_query,
-            chunks=merged_results,
-            top_k=rerank_top_n
-        )
+        def _retrieve_and_score():
+            from app.rag.engine import RAGEngine
+            if use_mq:
+                mq_retriever = MultiQueryRetriever(self.llm, self.hybrid_search, n_queries=3)
+                retrieval_res = mq_retriever.retrieve(retry_query, project_id, candidate_k, use_multi_query=True)
+                merged, used = retrieval_res["chunks"], retrieval_res["queries_used"]
+            else:
+                merged, used = self.hybrid_search(retry_query, project_id, candidate_k), [retry_query]
+            reranked, scored_flag = reranker_service.rerank_scored(query, merged, rerank_top_n)
+            engine = RAGEngine(self.session)
+            relevance = engine.relevance_scores(query, reranked, rag_config, scored_flag)
+            # Also judge each chunk against the rephrased question (it expands
+            # abbreviations/jargon: "PTO" -> "paid time off") and keep the better score.
+            # Only the bi-encoder cosine is used for the rephrasing: cross-encoders
+            # give inflated scores to unusual LLM-written queries, while an off-topic
+            # question stays off-topic under cosine however it is rephrased.
+            if retry_query and retry_query.strip().lower() != query.strip().lower():
+                retry_rel = engine.relevance_scores(retry_query, reranked, rag_config, False)
+                relevance = [max(a, b) for a, b in zip(relevance, retry_rel)]
+            scored = [(doc, rel) for (doc, _), rel in zip(reranked, relevance)]
+            return scored, used, engine.evaluate_confidence(scored, rag_config)
 
-        # Check confidence gate
-        doc_ids = list(set(int(doc.metadata.get("doc_id")) for doc, _ in final_reranked if doc.metadata.get("doc_id") is not None))
-        doc_meta_map = {}
-        if doc_ids:
-            docs = self.session.exec(select(Document).where(Document.id.in_(doc_ids))).all()
-            for d in docs:
-                doc_meta_map[d.id] = {
-                    "file_type": d.filename.split(".")[-1] if "." in d.filename else "unknown",
-                    "upload_date": d.uploaded_at
-                }
-
-        chunk_dicts = []
-        reranker_scores = []
-        document_metadata = []
-        for doc, score in final_reranked:
-            did = doc.metadata.get("doc_id")
-            meta = doc_meta_map.get(did, {}) if did else {}
-            chunk_dicts.append({
-                "id": str(did or ""),
-                "text": doc.page_content
-            })
-            reranker_scores.append(score)
-            document_metadata.append(meta)
-
-        confidence_gate = get_confidence_gate(threshold=0.65)
-        new_gate_result = confidence_gate.evaluate(chunk_dicts, reranker_scores, document_metadata)
+        from starlette.concurrency import run_in_threadpool
+        final_reranked, queries_used, new_gate_result = await run_in_threadpool(_retrieve_and_score)
         new_confidence = new_gate_result.max_confidence
 
         # Re-run RAGASEvaluator's context relevance check

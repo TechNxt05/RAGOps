@@ -1,23 +1,20 @@
-import os
-import shutil
+import hashlib
 import logging
-from typing import List, Tuple, Optional, Any
 from datetime import datetime
-from sqlmodel import Session, select
-from langchain_community.vectorstores import FAISS
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from typing import Any, Dict, List, Optional, Set, Tuple
+
 from langchain_core.documents import Document as LCDocument
+from sqlalchemy import update
+from sqlmodel import Session, select
 
-from app.models.rag import RAGConfig, Document, Chunk, Project
+from app.models.rag import Chunk, Document, Project, RAGConfig
+from app.rag import vector_store
+from app.services import model_registry
 from app.services.bm25_service import bm25_manager
-from app.services.rrf_service import hybrid_search_merge
-from app.services.context_pruner import context_pruner
 from app.services.reranker_service import reranker_service
+from app.services.rrf_service import hybrid_search_merge
 
-BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-VECTOR_STORE_PATH = os.path.join(BACKEND_DIR, "faiss_index")
+logger = logging.getLogger(__name__)
 
 
 class SearchResultList(list):
@@ -32,145 +29,161 @@ class SearchResultList(list):
         self.chunks_after_pruning = 0
         self.pruning_reduction_pct = 0.0
         self.used_hybrid_search = False
-        
-        # New attributes for upgrades
+
         self.query_analysis = None
         self.confidence_gate_result = None
+        self.conflict_detection = None
         self.pipeline_trace = None
+
+
+def bump_kb_version(session: Session, project_id: int) -> None:
+    """Atomically advance the project's knowledge-base version. Invalidates the
+    BM25 cache and the semantic answer cache for the project."""
+    session.exec(
+        update(Project)
+        .where(Project.id == project_id)
+        .values(kb_version=Project.kb_version + 1, kb_version_updated_at=datetime.utcnow())
+    )
+    bm25_manager.invalidate(project_id)
+
+
+def _sha256(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 class RAGEngine:
     def __init__(self, session: Session):
         self.session = session
-        # Default local embeddings for fast, zero-rate-limit indexing
-        self._default_embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        self._configs: Dict[int, RAGConfig] = {}
 
+    # ------------------------------------------------------------------ config
     def _get_embeddings(self, config: Optional[RAGConfig] = None):
-        """Load embeddings based on config. Defaults to all-MiniLM-L6-v2."""
-        if not config or not config.embedding_model:
-            return self._default_embeddings
+        return model_registry.get_embedder(config.embedding_model if config else None)
 
-        if "google" in config.embedding_model.lower() or "gemini" in config.embedding_model.lower():
-            return GoogleGenerativeAIEmbeddings(
-                model="models/gemini-embedding-2",
-                google_api_key=os.getenv("GEMINI_API_KEY"),
-            )
-        
-        # Default to local HuggingFace embeddings
-        return self._default_embeddings
+    def _embedding_model(self, config: Optional[RAGConfig]) -> str:
+        return model_registry.normalize_model_name(config.embedding_model if config else None)
 
     def get_active_config(self, project_id: int) -> RAGConfig:
+        cached = self._configs.get(project_id)
+        if cached is not None:
+            return cached
         config = self.session.exec(
             select(RAGConfig)
             .where(RAGConfig.project_id == project_id)
-            .where(RAGConfig.is_active == True)
+            .where(RAGConfig.is_active == True)  # noqa: E712
+            .order_by(RAGConfig.created_at.desc())
         ).first()
         if not config:
             raise ValueError(f"No active RAG configuration found for Project ID {project_id}")
+        self._configs[project_id] = config
         return config
+
+    def _config_or_default(self, project_id: int) -> RAGConfig:
+        try:
+            return self.get_active_config(project_id)
+        except ValueError:
+            return RAGConfig(project_id=project_id)
+
+    def _kb_version(self, project_id: int) -> int:
+        project = self.session.get(Project, project_id)
+        return (project.kb_version or 1) if project else 1
 
     def _inactive_doc_ids(self, project_id: int) -> set[int]:
         rows = self.session.exec(
-            select(Document.id).where(Document.project_id == project_id).where(Document.is_active == False)
+            select(Document.id).where(Document.project_id == project_id).where(Document.is_active == False)  # noqa: E712
         ).all()
         return {int(r) for r in rows if r is not None}
 
-    def _rebuild_bm25_for_project(self, project_id: int) -> None:
-        """Fetches all active chunks for a project and builds the BM25 index."""
-        try:
-            rows = self.session.exec(
-                select(Chunk)
-                .join(Document, Chunk.document_id == Document.id)
-                .where(Document.project_id == project_id)
-                .where(Document.is_active == True)
-                .where(Document.processed == True)
-            ).all()
-            chunks = [chunk.content for chunk in rows]
-            if chunks:
-                bm25_manager.build_index(str(project_id), chunks)
+    # --------------------------------------------------------------- indexing
+    def _chunk_document(self, document: Document, config: RAGConfig) -> Tuple[List[dict], str, dict]:
+        if document.parsing_method == "docling" and document.parsed_chunks_json:
+            chunks_list = document.parsed_chunks_json.get("chunks", [])
+            new_chunks = [
+                {"text": c["content"], "metadata": c.get("metadata", {})}
+                for c in chunks_list if c.get("content", "").strip()
+            ]
+            metrics = {
+                "composite_score": 1.0, "size_compliance": 1.0, "intrachunk_cohesion": 1.0,
+                "contextual_coherence": 1.0, "block_integrity": 1.0, "reference_completeness": 1.0,
+            }
+            return new_chunks, "docling", metrics
+
+        from app.services.adaptive_chunker import get_adaptive_chunker
+        content = document.content or ""
+        doc_type = document.filename.rsplit(".", 1)[-1] if document.filename and "." in document.filename else "unknown"
+        chunker = get_adaptive_chunker(chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap)
+        texts, strategy, metrics, all_scores = chunker.select_and_chunk(text=content, document_type=doc_type)
+        new_chunks = [{"text": t, "metadata": {}} for t in texts if t and t.strip()]
+        strategy_metrics = {
+            "composite_score": metrics.composite_score,
+            "size_compliance": metrics.size_compliance,
+            "intrachunk_cohesion": metrics.intrachunk_cohesion,
+            "contextual_coherence": metrics.contextual_coherence,
+            "block_integrity": metrics.block_integrity,
+            "reference_completeness": metrics.reference_completeness,
+            "all_strategy_scores": all_scores,
+        }
+        return new_chunks, strategy.value, strategy_metrics
+
+    def _sync_chunks(self, document: Document, new_chunks: List[dict], model: str) -> dict:
+        """Content-addressed delta indexing: chunks whose text is unchanged keep
+        their row and their embedding (even if they moved position); only new or
+        edited text is embedded; vanished chunks are deleted. One transaction."""
+        existing = self.session.exec(select(Chunk).where(Chunk.document_id == document.id)).all()
+        by_hash: Dict[str, List[Chunk]] = {}
+        for ch in existing:
+            ch_hash = ch.content_hash or _sha256(ch.content)
+            by_hash.setdefault(ch_hash, []).append(ch)
+
+        kept: List[Chunk] = []
+        created: List[Chunk] = []
+        for idx, item in enumerate(new_chunks):
+            text = item["text"]
+            ch_hash = _sha256(text)
+            bucket = by_hash.get(ch_hash)
+            if bucket:
+                chunk = bucket.pop()
+                kept.append(chunk)
             else:
-                bm25_manager.delete_index(str(project_id))
-        except Exception as e:
-            logging.error(f"Error rebuilding BM25 index for project {project_id}: {e}")
-
-    def rebuild_full_index(self, project_id: Optional[int] = None) -> None:
-        """Rebuild FAISS from all chunks belonging to active, processed documents."""
-        config = None
-        if project_id:
-            try:
-                config = self.get_active_config(project_id)
-            except Exception:
-                pass
-        
-        embeddings = self._get_embeddings(config)
-
-        rows_query = (
-            select(Chunk, Document)
-            .join(Document, Chunk.document_id == Document.id)
-            .where(Document.is_active == True)
-            .where(Document.processed == True)
-        )
-        
-        if project_id:
-            rows_query = rows_query.where(Document.project_id == project_id)
-            
-        rows = self.session.exec(rows_query).all()
-
-        texts: List[str] = []
-        metadatas: List[dict] = []
-        ids: List[str] = []
-        
-        # Keep track of chunk counts per doc to backfill chunk_index
-        doc_counters = {}
-        
-        for chunk, doc in rows:
-            texts.append(chunk.content)
-            
-            # Backfill Phase 2 fields if missing
-            if not chunk.content_hash:
-                import hashlib
-                chunk.content_hash = hashlib.sha256(chunk.content.encode("utf-8")).hexdigest()
-            if chunk.chunk_index is None:
-                curr = doc_counters.get(doc.id, 0)
-                chunk.chunk_index = curr
-                doc_counters[doc.id] = curr + 1
-            if not chunk.doc_id_version:
-                chunk.doc_id_version = f"{doc.id}:{chunk.chunk_index}:{chunk.content_hash[:8]}"
+                chunk = Chunk(document_id=document.id, content=text, content_hash=ch_hash, chunk_version=1)
+                created.append(chunk)
+            chunk.chunk_index = idx
+            chunk.content_hash = ch_hash
+            chunk.doc_id_version = f"{document.id}:{idx}:{ch_hash[:8]}"
+            chunk.chunk_metadata = item.get("metadata") or None
             self.session.add(chunk)
-            
-            metadatas.append(
-                {
-                    "source": doc.filename,
-                    "doc_id": doc.id,
-                    "project_id": doc.project_id,
-                    "content_hash": chunk.content_hash,
-                    "doc_id_version": chunk.doc_id_version,
-                }
+
+        stale = [c for bucket in by_hash.values() for c in bucket]
+        stale_ids = [c.id for c in stale if c.id is not None]
+        vector_store.delete_for_chunks(self.session, stale_ids)
+        for c in stale:
+            self.session.delete(c)
+        self.session.flush()
+
+        all_chunks = kept + created
+        have = vector_store.embedded_chunk_ids(self.session, [c.id for c in all_chunks], model)
+        to_embed = [c for c in all_chunks if c.id not in have]
+        if to_embed:
+            vectors = model_registry.embed_documents([c.content for c in to_embed], model)
+            vector_store.add_embeddings(
+                self.session,
+                [(c.id, document.id, document.project_id) for c in to_embed],
+                vectors,
+                model,
             )
-            ids.append(chunk.doc_id_version)
+            vector_store.ensure_hnsw_index(len(vectors[0]))
 
-        self.session.commit()
+        return {
+            "total_chunks": len(new_chunks),
+            "added": len(created),
+            "updated": 0,
+            "deleted": len(stale),
+            "unchanged": len(kept),
+            "embedded": len(to_embed),
+            "indexed_at": datetime.utcnow().isoformat(),
+        }
 
-        if not texts:
-            if os.path.exists(VECTOR_STORE_PATH):
-                shutil.rmtree(VECTOR_STORE_PATH, ignore_errors=True)
-            if project_id:
-                bm25_manager.delete_index(str(project_id))
-            return
-
-        vector_store = FAISS.from_texts(texts, embeddings, metadatas=metadatas, ids=ids)
-        vector_store.save_local(VECTOR_STORE_PATH)
-
-        # Build BM25 index for projects
-        if project_id:
-            self._rebuild_bm25_for_project(project_id)
-        else:
-            projects = self.session.exec(select(Project)).all()
-            for proj in projects:
-                if proj.id:
-                    self._rebuild_bm25_for_project(proj.id)
-
-    def process_document(self, document: Document) -> None:
+    def process_document(self, document: Document) -> dict:
         if not document.project_id:
             raise ValueError("Document must have a project_id")
 
@@ -188,99 +201,130 @@ class RAGEngine:
                 self.session.add(config)
                 self.session.commit()
                 self.session.refresh(config)
+                self._configs[document.project_id] = config
 
-            embeddings = self._get_embeddings(config)
-            
-            # Check if this document was parsed using Docling (which pre-chunks tables and text)
-            if document.parsing_method == "docling" and document.parsed_chunks_json:
-                chunks_list = document.parsed_chunks_json.get("chunks", [])
-                new_chunks = [
-                    {
-                        "index": idx,
-                        "text": chunk["content"],
-                        "metadata": chunk.get("metadata", {})
-                    }
-                    for idx, chunk in enumerate(chunks_list)
-                ]
-                strategy_val = "docling"
-                strategy_metrics = {
-                    "composite_score": 1.0,
-                    "size_compliance": 1.0,
-                    "intrachunk_cohesion": 1.0,
-                    "contextual_coherence": 1.0,
-                    "block_integrity": 1.0,
-                    "reference_completeness": 1.0
-                }
-            else:
-                # Fallback / Default Text Chunking (Adaptive)
-                from app.services.adaptive_chunker import get_adaptive_chunker
-
-                content = document.content or ""
-                doc_type = document.filename.split(".")[-1] if document.filename and "." in document.filename else "unknown"
-                
-                chunker = get_adaptive_chunker(chunk_size=config.chunk_size, chunk_overlap=config.chunk_overlap)
-                texts, strategy, metrics, all_scores = chunker.select_and_chunk(
-                    text=content,
-                    document_type=doc_type
-                )
-                
-                new_chunks = [
-                    {
-                        "index": idx,
-                        "text": txt,
-                        "metadata": {}
-                    }
-                    for idx, txt in enumerate(texts)
-                ]
-                strategy_val = strategy.value
-                strategy_metrics = {
-                    "composite_score": metrics.composite_score,
-                    "size_compliance": metrics.size_compliance,
-                    "intrachunk_cohesion": metrics.intrachunk_cohesion,
-                    "contextual_coherence": metrics.contextual_coherence,
-                    "block_integrity": metrics.block_integrity,
-                    "reference_completeness": metrics.reference_completeness,
-                    "all_strategy_scores": all_scores
-                }
-
-            # Initialize vector store if not exists
-            if os.path.exists(VECTOR_STORE_PATH):
-                try:
-                    vector_store = FAISS.load_local(
-                        VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True
-                    )
-                except Exception:
-                    vector_store = None
-            else:
-                vector_store = None
-
-            # Execute Delta Indexing
-            from app.services.delta_indexer import DeltaIndexer
-            delta_indexer = DeltaIndexer(self.session, vector_store, embeddings)
-            delta_stats = delta_indexer.delta_index(document.id, new_chunks)
+            model = self._embedding_model(config)
+            new_chunks, strategy_val, strategy_metrics = self._chunk_document(document, config)
+            stats = self._sync_chunks(document, new_chunks, model)
 
             document.processed = True
             document.processing_status = "complete"
             document.chunk_count = len(new_chunks)
             document.chunk_size_used = config.chunk_size
-            document.embedding_model_used = config.embedding_model or "google-embedding-001"
-            
-            # Save strategy metadata
+            document.embedding_model_used = model
             document.chunking_strategy = strategy_val
             document.chunking_metrics = strategy_metrics
-            
             self.session.add(document)
+            bump_kb_version(self.session, document.project_id)
             self.session.commit()
-
-            # Build BM25 index for the project after processing
-            self._rebuild_bm25_for_project(document.project_id)
+            return stats
         except Exception as exc:
+            self.session.rollback()
             document.processed = False
             document.processing_status = "failed"
-            document.processing_error = str(exc)
+            document.processing_error = str(exc)[:2000]
             self.session.add(document)
             self.session.commit()
             raise
+
+    def rebuild_full_index(self, project_id: Optional[int] = None) -> None:
+        """(Re-)embed every chunk of a project with its configured embedding model.
+        Only the given project is touched; with no project_id, every project is
+        rebuilt one at a time."""
+        if project_id is None:
+            for pid in self.session.exec(select(Project.id)).all():
+                self.rebuild_full_index(pid)
+            return
+
+        config = self._config_or_default(project_id)
+        model = self._embedding_model(config)
+        rows = self.session.exec(
+            select(Chunk, Document)
+            .join(Document, Chunk.document_id == Document.id)
+            .where(Document.project_id == project_id)
+            .where(Document.is_active == True)  # noqa: E712
+        ).all()
+
+        for chunk, doc in rows:
+            if not chunk.content_hash:
+                chunk.content_hash = _sha256(chunk.content)
+                self.session.add(chunk)
+
+        vector_store.delete_other_models(self.session, project_id, model)
+        chunk_ids = [c.id for c, _ in rows]
+        have = vector_store.embedded_chunk_ids(self.session, chunk_ids, model)
+        missing = [(c, d) for c, d in rows if c.id not in have]
+        for start in range(0, len(missing), 256):
+            batch = missing[start:start + 256]
+            vectors = model_registry.embed_documents([c.content for c, _ in batch], model)
+            vector_store.add_embeddings(self.session, [(c.id, d.id, project_id) for c, d in batch], vectors, model)
+            vector_store.ensure_hnsw_index(len(vectors[0]))
+            self.session.flush()
+        bump_kb_version(self.session, project_id)
+        self.session.commit()
+
+    def reindex_all(self) -> None:
+        self.rebuild_full_index()
+
+    # -------------------------------------------------------------- retrieval
+    def _load_docs(self, scored: List[Tuple[int, float]], score_key: str) -> List[Tuple[LCDocument, float]]:
+        if not scored:
+            return []
+        ids = [cid for cid, _ in scored]
+        rows = self.session.exec(
+            select(Chunk, Document).join(Document, Chunk.document_id == Document.id).where(Chunk.id.in_(ids))
+        ).all()
+        by_id = {c.id: (c, d) for c, d in rows}
+        out = []
+        for cid, score in scored:
+            if cid not in by_id:
+                continue
+            chunk, doc = by_id[cid]
+            meta = dict(chunk.chunk_metadata or {})
+            meta.update({
+                "source": doc.filename,
+                "doc_id": doc.id,
+                "chunk_id": chunk.id,
+                "chunk_index": chunk.chunk_index,
+                "project_id": doc.project_id,
+                "content_hash": chunk.content_hash,
+                "doc_id_version": chunk.doc_id_version,
+                score_key: round(float(score), 6),
+            })
+            out.append((LCDocument(page_content=chunk.content, metadata=meta), float(score)))
+        return out
+
+    def semantic_search(
+        self, query: str, project_id: int, k: int,
+        filter_document_id: Optional[int] = None, filter_sources: Optional[Set[str]] = None,
+    ) -> List[Tuple[LCDocument, float]]:
+        config = self._config_or_default(project_id)
+        model = self._embedding_model(config)
+        query_vec = model_registry.embed_query(query, model)
+        hits = vector_store.search(
+            project_id, query_vec, model, k,
+            document_id=filter_document_id, sources=filter_sources,
+            exact=self._use_exact_search(project_id, model),
+        )
+        return self._load_docs(hits, "vector_score")
+
+    def keyword_search(
+        self, query: str, project_id: int, k: int,
+        filter_document_id: Optional[int] = None, filter_sources: Optional[Set[str]] = None,
+    ) -> List[Tuple[LCDocument, float]]:
+        hits = bm25_manager.search(
+            self.session, project_id, self._kb_version(project_id), query, top_k=k,
+            document_id=filter_document_id, sources=filter_sources,
+        )
+        return self._load_docs(hits, "bm25_score")
+
+    _exact_cache: Dict[Tuple[int, str, int], bool] = {}
+
+    def _use_exact_search(self, project_id: int, model: str) -> bool:
+        key = (project_id, model, self._kb_version(project_id))
+        if key not in self._exact_cache:
+            self._exact_cache[key] = vector_store.count_vectors(project_id, model) <= vector_store.EXACT_SEARCH_LIMIT
+        return self._exact_cache[key]
 
     def _single_hybrid_search(
         self,
@@ -290,145 +334,77 @@ class RAGEngine:
         filter_document_id: Optional[int] = None,
         filter_sources: Optional[set[str]] = None
     ) -> List[Tuple[LCDocument, float]]:
-        """
-        Executes a single hybrid retrieval search (semantic + BM25 if configured),
-        filtering by inactive documents, and optionally by document_id or sources.
-        """
-        try:
-            config = self.get_active_config(project_id)
-        except ValueError:
-            config = RAGConfig(project_id=project_id)
-
-        index_file = os.path.join(VECTOR_STORE_PATH, "index.faiss")
-        if not os.path.exists(VECTOR_STORE_PATH) or not os.path.exists(index_file):
-            if config.use_hybrid_search and bm25_manager.index_exists(str(project_id)):
-                raw_bm25 = bm25_manager.search(str(project_id), query, top_k=k)
-                return [(LCDocument(page_content=t[0], metadata={"source": "bm25", "doc_id": t[1]}), 1.0) for t in raw_bm25]
-            return []
-            
-        embeddings = self._get_embeddings(config)
-        vector_store = FAISS.load_local(
-            VECTOR_STORE_PATH, embeddings, allow_dangerous_deserialization=True
-        )
-        
+        """One retrieval pass: vector search, plus BM25 fused with weighted RRF
+        when hybrid search is enabled for the project."""
+        config = self._config_or_default(project_id)
         candidate_k = max(k * 5, 20)
-        inactive = self._inactive_doc_ids(project_id)
-        
-        # 1. Semantic Search
-        results_with_score = vector_store.similarity_search_with_score(
-            query,
-            k=candidate_k * 2,  # Fetch more to allow for filtering
-            filter={"project_id": project_id},
-        )
-        
-        semantic_results = []
-        for doc, score in results_with_score:
-            did = doc.metadata.get("doc_id")
-            if did is not None and int(did) in inactive:
-                continue
-            if filter_document_id is not None and did != filter_document_id:
-                continue
-            if filter_sources is not None and doc.metadata.get("source") not in filter_sources:
-                continue
-            semantic_results.append((doc, score))
-            
-        # 2. BM25 Search
-        bm25_results = []
-        if config.use_hybrid_search and bm25_manager.index_exists(str(project_id)):
-            raw_bm25 = bm25_manager.search(str(project_id), query, top_k=candidate_k * 2)
-            # Filter BM25 results by active/inactive and Python filters
-            if filter_document_id is not None or filter_sources is not None or inactive:
-                # Query Chunk/Document tables to verify filter matches
-                texts = [r[0] for r in raw_bm25]
-                if texts:
-                    db_chunks = self.session.exec(
-                        select(Chunk, Document)
-                        .join(Document, Chunk.document_id == Document.id)
-                        .where(Document.project_id == project_id)
-                        .where(Document.is_active == True)
-                        .where(Chunk.content.in_(texts))
-                    ).all()
-                    
-                    valid_texts = set()
-                    for chunk, doc in db_chunks:
-                        if doc.id in inactive:
-                            continue
-                        if filter_document_id is not None and doc.id != filter_document_id:
-                            continue
-                        if filter_sources is not None and doc.filename not in filter_sources:
-                            continue
-                        valid_texts.add(chunk.content)
-                        
-                    for text, score in raw_bm25:
-                        if text in valid_texts:
-                            bm25_results.append((text, score))
-            else:
-                bm25_results = raw_bm25
-                
-        # 3. Hybrid Merge (RRF)
-        if config.use_hybrid_search and bm25_results:
-            merged_results = hybrid_search_merge(
-                semantic_results=semantic_results,
-                bm25_results=bm25_results,
-                semantic_weight=config.semantic_weight,
-                bm25_weight=1.0 - config.semantic_weight
-            )
-        else:
-            merged_results = semantic_results
-            
-        return merged_results[:k]
 
-    def reindex_all(self) -> None:
-        self.rebuild_full_index()
+        semantic_results = self.semantic_search(query, project_id, candidate_k * 2, filter_document_id, filter_sources)
+        if not config.use_hybrid_search:
+            return semantic_results[:k]
+
+        bm25_results = self.keyword_search(query, project_id, candidate_k * 2, filter_document_id, filter_sources)
+        if not bm25_results:
+            return semantic_results[:k]
+        merged = hybrid_search_merge(
+            semantic_results=semantic_results,
+            bm25_results=bm25_results,
+            semantic_weight=config.semantic_weight,
+            bm25_weight=1.0 - config.semantic_weight,
+        )
+        return merged[:k]
+
+    def relevance_scores(self, query: str, docs: List[Tuple[LCDocument, float]], config: RAGConfig, reranked: bool) -> List[float]:
+        """Calibrated relevance in [0, 1] for the confidence gate.
+
+        Two independent estimators are combined with max(): the cross-encoder
+        (precise, but can miss heavy paraphrase - "signs off on overseas trips"
+        vs "international travel must be approved") and bi-encoder cosine (robust
+        to paraphrase). On labelled pairs neither produced a false positive
+        (irrelevant <= 0.013 on both), so max() rescues paraphrases without
+        letting unrelated chunks through. Ranking order is unaffected."""
+        if not docs:
+            return []
+        model = self._embedding_model(config)
+        q = model_registry.embed_query(query, model)
+        # Reuse the chunk vectors stored at indexing time; embed only what's missing
+        # (e.g. text altered by compression or synthetic computation results).
+        stored = vector_store.stored_vectors(
+            [int(d.metadata["chunk_id"]) for d, _ in docs
+             if d.metadata.get("chunk_id") is not None and not d.metadata.get("compression_applied")],
+            model,
+        )
+        vecs = [stored.get(d.metadata.get("chunk_id")) if not d.metadata.get("compression_applied") else None for d, _ in docs]
+        missing = [i for i, v in enumerate(vecs) if v is None]
+        if missing:
+            fresh = model_registry.embed_documents([docs[i][0].page_content for i in missing], model)
+            for i, v in zip(missing, fresh):
+                vecs[i] = v
+        cos_rel = [model_registry.cosine_to_relevance(model_registry.cosine(q, v)) for v in vecs]
+        if not reranked:
+            return cos_rel
+        return [max(float(s), c) for (_, s), c in zip(docs, cos_rel)]
 
     def search(
         self, query: str, project_id: int, k: int = 4, score_threshold: float = 0.0,
         constraints=None, rewritten_query: Optional[str] = None, llm_client: Optional[Any] = None
     ) -> List[Tuple[LCDocument, float]]:
-        if not os.path.exists(VECTOR_STORE_PATH):
-            return SearchResultList()
-            
         from app.services.query_understanding import get_query_understanding
         from app.services.confidence_gate import get_confidence_gate
         from app.services.pipeline_tracer import PipelineTracer, PipelineStage
 
         tracer = PipelineTracer(query)
-        
+
         try:
-            config = self.get_active_config(project_id)
-            
-            # Setup default LLM client if not provided
+            config = self._config_or_default(project_id)
             if llm_client is None:
-                primary_provider = config.primary_models[0]["provider"] if config.primary_models else "google"
-                primary_name = config.primary_models[0]["name"] if config.primary_models else "gemini-3.1-flash-lite"
-                if primary_provider == "groq":
-                    from langchain_groq import ChatGroq
-                    llm_client = ChatGroq(
-                        model_name=primary_name,
-                        api_key=os.getenv("GROQ_API_KEY"),
-                        temperature=config.temperature,
-                    )
-                elif primary_provider == "openrouter":
-                    from langchain_openai import ChatOpenAI
-                    llm_client = ChatOpenAI(
-                        model_name=primary_name,
-                        openai_api_key=os.getenv("OPENROUTER_API_KEY"),
-                        openai_api_base="https://openrouter.ai/api/v1",
-                        temperature=config.temperature,
-                    )
-                else:
-                    from langchain_google_genai import ChatGoogleGenerativeAI
-                    model_to_use = primary_name if ("gemini" in primary_name and not "/" in primary_name) else "gemini-3.1-flash-lite"
-                    llm_client = ChatGoogleGenerativeAI(
-                        model=model_to_use,
-                        google_api_key=os.getenv("GEMINI_API_KEY"),
-                        temperature=config.temperature,
-                    )
+                from app.services.llm_factory import build_chat_model, model_chain
+                primary = model_chain(config)[0]
+                llm_client = build_chat_model(primary["provider"], primary["name"], temperature=config.temperature)
 
             # Stage 1: Query Understanding
             tracer.start_stage(PipelineStage.QUERY_UNDERSTANDING)
-            query_understander = get_query_understanding()
-            analysis = query_understander.analyze(query)
+            analysis = get_query_understanding().analyze(query)
             tracer.end_stage(
                 PipelineStage.QUERY_UNDERSTANDING,
                 metadata={
@@ -443,193 +419,158 @@ class RAGEngine:
             # Stage 2: Retrieval
             tracer.start_stage(PipelineStage.RETRIEVAL)
             effective_query = rewritten_query if rewritten_query else analysis.expanded_query
-            
-            # --- Upgrade: HyDE ---
-            enable_hyde = getattr(config, "enable_hyde", False) or config.pipeline_variant == "hyde"
-            hyde_doc = None
+
+            enable_hyde = bool(getattr(config, "enable_hyde", False)) or config.pipeline_variant == "hyde"
+            hyde_retriever = None
             if enable_hyde:
                 from app.services.hyde_retriever import HyDERetriever
                 hyde_retriever = HyDERetriever(llm_client)
-                hyde_doc = hyde_retriever.generate_hypothetical_document(effective_query)
-                # We search FAISS using the HyDE doc instead of the raw query
-                search_query = hyde_doc
+                search_query = hyde_retriever.generate_hypothetical_document(effective_query)
             else:
                 search_query = effective_query
-            
-            # Phase 3: Semantic Router query classification
-            from app.services.semantic_router import SemanticRouter
-            semantic_router = SemanticRouter()
-            routing_res = semantic_router.classify(query, analysis.complexity.value)
-            
-            top_k_override = routing_res["top_k"]
-            use_mq = routing_res["use_multi_query"]
-            rerank_top_n = routing_res["rerank_top_n"]
-            candidate_k = max(top_k_override * 5, 20)
-            
-            queries_used = [effective_query]
-            multi_query_info = None
 
-            # Execute multi-query if enabled by SemanticRouter
+            from app.services.semantic_router import SemanticRouter
+            routing_res = SemanticRouter().classify(query, analysis.complexity.value)
+
+            # With the adaptive router on, the router sizes retrieval per query;
+            # otherwise the project's configured top_k is authoritative.
+            if getattr(config, "enable_adaptive_router", True):
+                final_k = max(int(routing_res["rerank_top_n"]), 1)
+                use_mq = bool(routing_res["use_multi_query"]) and bool(getattr(config, "use_multi_query", True))
+            else:
+                final_k = max(int(k or config.top_k or 4), 1)
+                use_mq = bool(getattr(config, "use_multi_query", True))
+            candidate_k = max(final_k * 5, 20)
+
+            multi_query_info = None
             if use_mq:
                 from app.services.multi_query_retriever import MultiQueryRetriever
                 mq_retriever = MultiQueryRetriever(llm_client, self._single_hybrid_search, n_queries=3)
-                retrieval_res = mq_retriever.retrieve(effective_query, project_id, candidate_k, use_multi_query=True)
+                retrieval_res = mq_retriever.retrieve(search_query, project_id, candidate_k, use_multi_query=True)
                 merged_results = retrieval_res["chunks"]
-                queries_used = retrieval_res["queries_used"]
                 multi_query_info = {
-                    "queries_used": queries_used,
+                    "queries_used": retrieval_res["queries_used"],
                     "fusion_method": retrieval_res["fusion_method"],
-                    "query_count": len(queries_used),
+                    "query_count": len(retrieval_res["queries_used"]),
                     "total_candidates": retrieval_res["total_candidates"]
                 }
             elif analysis.retrieval_strategy == "multi" and len(analysis.sub_queries) > 1:
-                seen_contents = set()
+                seen: Set[Any] = set()
                 merged_results = []
                 for sub_q in analysis.sub_queries:
-                    # If HyDE is enabled, we'd ideally apply it to subqueries too, but to avoid 
-                    # multiple expensive LLM calls, we just use the raw subquery or apply HyDE once.
-                    sub_search_query = hyde_retriever.generate_hypothetical_document(sub_q) if enable_hyde else sub_q
-                    sub_res = self._single_hybrid_search(sub_search_query, project_id, candidate_k // 2)
-                    for doc, score in sub_res:
-                        if doc.page_content not in seen_contents:
-                            seen_contents.add(doc.page_content)
+                    sub_search = hyde_retriever.generate_hypothetical_document(sub_q) if hyde_retriever else sub_q
+                    for doc, score in self._single_hybrid_search(sub_search, project_id, max(candidate_k // 2, 10)):
+                        key = doc.metadata.get("chunk_id") or doc.page_content
+                        if key not in seen:
+                            seen.add(key)
                             merged_results.append((doc, score))
             else:
                 merged_results = self._single_hybrid_search(search_query, project_id, candidate_k)
 
-            used_hybrid = getattr(config, "use_hybrid_search", True)
+            used_hybrid = bool(getattr(config, "use_hybrid_search", True))
 
-            # Apply Hard Constraints
             if constraints and constraints.has_constraints:
                 from app.services.constraint_extractor import ConstraintExtractor
-                extractor = ConstraintExtractor()
-                dict_chunks = [{"id": "", "text": doc.page_content, "source": doc.metadata.get("source", ""), "_orig_doc": doc, "_orig_score": score} for doc, score in merged_results]
-                filtered_dicts = extractor.apply_to_chunks(dict_chunks, constraints)
-                if filtered_dicts:
-                    merged_results = [(d["_orig_doc"], d["_orig_score"]) for d in filtered_dicts]
+                dict_chunks = [{"id": "", "text": d.page_content, "source": d.metadata.get("source", ""), "_orig_doc": d, "_orig_score": s} for d, s in merged_results]
+                filtered = ConstraintExtractor().apply_to_chunks(dict_chunks, constraints)
+                if filtered:
+                    merged_results = [(d["_orig_doc"], d["_orig_score"]) for d in filtered]
 
-            # Context Pruning (Old TF-IDF pruner bypassed/routed around)
-            pruned_results = merged_results
             orig_count = len(merged_results)
-            pruned_count = len(merged_results)
-            reduction_pct = 0.0
+            candidates = merged_results
 
-            # Cross-Reference Resolution
-            from app.services.cross_reference_resolver import CrossReferenceResolver
-            xref_resolver = CrossReferenceResolver()
-            resolver_res = xref_resolver.resolve_all(
-                chunks=pruned_results,
-                hybrid_search_fn=self._single_hybrid_search,
-                project_id=project_id,
-                max_resolutions=3
-            )
-            additional_chunks = resolver_res["additional_chunks"]
-            if additional_chunks:
-                pruned_results = pruned_results + additional_chunks
+            resolver_res = {"references_found": 0, "references_resolved": 0, "reference_details": [], "additional_chunks": []}
+            if getattr(config, "enable_cross_reference", True):
+                from app.services.cross_reference_resolver import CrossReferenceResolver
+                resolver_res = CrossReferenceResolver().resolve_all(
+                    chunks=candidates,
+                    hybrid_search_fn=self._single_hybrid_search,
+                    project_id=project_id,
+                    max_resolutions=3
+                )
+                if resolver_res["additional_chunks"]:
+                    candidates = candidates + resolver_res["additional_chunks"]
 
-            # BGE Reranker using rerank_top_n from routing
-            final_reranked = reranker_service.rerank(
-                query=query,
-                chunks=pruned_results,
-                top_k=rerank_top_n
-            )
+            reranked = False
+            if getattr(config, "enable_reranker", True):
+                final_ranked, reranked = reranker_service.rerank_scored(query, candidates, final_k)
+            else:
+                final_ranked = candidates[:final_k]
 
-            # Conflict Detection
-            from app.services.conflict_detector import ConflictDetector
-            conflict_detector = ConflictDetector()
-            conflict_res = conflict_detector.detect_conflicts(final_reranked, query)
+            relevance = self.relevance_scores(query, final_ranked, config, reranked)
+            final_ranked = [(d, rel) for (d, _), rel in zip(final_ranked, relevance)]
+            threshold = max(float(score_threshold or 0.0), float(config.similarity_threshold or 0.0))
+            if threshold > 0:
+                kept = [(d, s) for d, s in final_ranked if s >= threshold]
+                final_ranked = kept or final_ranked[:1]
 
-            # Phase 3: Contextual Compressor sentence-level compression
-            from app.services.contextual_compressor import ContextualCompressor
-            compressor = ContextualCompressor()
-            chunks_dicts = []
-            for doc, score in final_reranked:
-                chunks_dicts.append({
-                    "content": doc.page_content,
-                    "source": doc.metadata.get("source", ""),
-                    "doc_id": doc.metadata.get("doc_id"),
-                    "score": score,
-                    "metadata": doc.metadata,
-                    "_orig_doc": doc
-                })
-            compression_res = compressor.compress_chunks(
-                query=effective_query,
-                chunks=chunks_dicts,
-                max_total_tokens=2000,
-                min_sentences_per_chunk=1
-            )
-            compressed_reranked = []
-            for c in compression_res["compressed_chunks"]:
-                orig_doc = c["_orig_doc"]
-                new_doc = LCDocument(
-                    page_content=c["content"],
-                    metadata={
-                        **orig_doc.metadata,
-                        "compression_applied": True,
+            conflict_res = None
+            if getattr(config, "enable_conflict_detection", True):
+                from app.services.conflict_detector import ConflictDetector
+                conflict_res = ConflictDetector().detect_conflicts(final_ranked, query)
+
+            compression_stats = None
+            if getattr(config, "enable_compression", True) and final_ranked:
+                from app.services.contextual_compressor import ContextualCompressor
+                chunks_dicts = [{
+                    "content": d.page_content, "source": d.metadata.get("source", ""),
+                    "doc_id": d.metadata.get("doc_id"), "score": s, "metadata": d.metadata, "_orig_doc": d,
+                } for d, s in final_ranked]
+                compression_res = ContextualCompressor().compress_chunks(
+                    query=effective_query,
+                    chunks=chunks_dicts,
+                    max_total_tokens=max(int(config.max_context_tokens or 2048), 256),
+                    min_sentences_per_chunk=1
+                )
+                compressed = []
+                for c in compression_res["compressed_chunks"]:
+                    orig = c["_orig_doc"]
+                    compressed.append((LCDocument(page_content=c["content"], metadata={
+                        **orig.metadata,
+                        "compression_applied": c["compression_applied"],
                         "sentences_kept": c["sentences_kept"],
                         "sentences_dropped": c["sentences_dropped"],
-                        "original_content": c["original_content"]
-                    }
-                )
-                compressed_reranked.append((new_doc, c["score"]))
-            final_reranked = compressed_reranked
+                        "original_content": c["original_content"],
+                    }), c["score"]))
+                final_ranked = compressed
+                compression_stats = {
+                    "original_token_estimate": compression_res["original_token_estimate"],
+                    "compressed_token_estimate": compression_res["compressed_token_estimate"],
+                    "compression_ratio": compression_res["compression_ratio"],
+                    "sentences_kept": compression_res["sentences_kept"],
+                    "sentences_dropped": compression_res["sentences_dropped"],
+                }
 
+            pruned_count = len(final_ranked)
+            reduction_pct = round(100.0 * (1 - pruned_count / orig_count), 2) if orig_count else 0.0
             retrieval_metadata = {
                 "chunks_before_pruning": orig_count,
                 "chunks_after_pruning": pruned_count,
                 "pruning_reduction_pct": reduction_pct,
                 "used_hybrid_search": used_hybrid,
-                "candidate_k": candidate_k
+                "candidate_k": candidate_k,
+                "final_k": final_k,
+                "reranked": reranked,
+                "cross_reference_resolution": {
+                    "references_found": resolver_res["references_found"],
+                    "references_resolved": resolver_res["references_resolved"],
+                    "details": resolver_res["reference_details"],
+                },
+                "conflict_detection": conflict_res,
             }
             if multi_query_info:
                 retrieval_metadata["multi_query_info"] = multi_query_info
-            
-            retrieval_metadata["cross_reference_resolution"] = {
-                "references_found": resolver_res["references_found"],
-                "references_resolved": resolver_res["references_resolved"],
-                "details": resolver_res["reference_details"]
-            }
-            retrieval_metadata["conflict_detection"] = conflict_res
+            tracer.end_stage(PipelineStage.RETRIEVAL, metadata=retrieval_metadata)
 
-            tracer.end_stage(
-                PipelineStage.RETRIEVAL,
-                metadata=retrieval_metadata
-            )
-
-            # Stage 3: Source Confidence Scoring & Gate
+            # Stage 3: Source Confidence Gate
             tracer.start_stage(PipelineStage.CONFIDENCE_GATE)
-            
-            doc_ids = list(set(int(doc.metadata.get("doc_id")) for doc, _ in final_reranked if doc.metadata.get("doc_id") is not None))
-            doc_meta_map = {}
-            if doc_ids:
-                docs = self.session.exec(select(Document).where(Document.id.in_(doc_ids))).all()
-                for d in docs:
-                    doc_meta_map[d.id] = {
-                        "file_type": d.filename.split(".")[-1] if "." in d.filename else "unknown",
-                        "upload_date": d.uploaded_at
-                    }
-
-            chunk_dicts = []
-            reranker_scores = []
-            document_metadata = []
-            for doc, score in final_reranked:
-                did = doc.metadata.get("doc_id")
-                meta = doc_meta_map.get(did, {}) if did else {}
-                chunk_dicts.append({
-                    "id": str(did or ""),
-                    "text": doc.page_content
-                })
-                reranker_scores.append(score)
-                document_metadata.append(meta)
-
-            confidence_gate = get_confidence_gate(threshold=0.65)
-            gate_result = confidence_gate.evaluate(chunk_dicts, reranker_scores, document_metadata)
-            
+            gate_result = self.evaluate_confidence(final_ranked, config)
             tracer.end_stage(
                 PipelineStage.CONFIDENCE_GATE,
                 status="success" if gate_result.passed else "failed",
                 metadata={
                     "passed": gate_result.passed,
+                    "threshold": getattr(config, "confidence_threshold", 0.4),
                     "max_confidence": gate_result.max_confidence,
                     "avg_confidence": gate_result.avg_confidence,
                     "low_confidence_chunks": gate_result.low_confidence_chunks,
@@ -638,9 +579,8 @@ class RAGEngine:
                 error=gate_result.refusal_reason if not gate_result.passed else None
             )
 
-            # Package output
             tracer.complete_pipeline()
-            final_results = SearchResultList(final_reranked)
+            final_results = SearchResultList(final_ranked)
             final_results.chunks_before_pruning = orig_count
             final_results.chunks_after_pruning = pruned_count
             final_results.pruning_reduction_pct = reduction_pct
@@ -650,20 +590,33 @@ class RAGEngine:
             final_results.conflict_detection = conflict_res
             final_results.pipeline_trace = tracer.to_dict()
             final_results.pipeline_trace["semantic_routing"] = routing_res
-            final_results.pipeline_trace["compression_stats"] = {
-                "original_token_estimate": compression_res["original_token_estimate"],
-                "compressed_token_estimate": compression_res["compressed_token_estimate"],
-                "compression_ratio": compression_res["compression_ratio"],
-                "sentences_kept": compression_res["sentences_kept"],
-                "sentences_dropped": compression_res["sentences_dropped"]
-            }
-
+            if compression_stats:
+                final_results.pipeline_trace["compression_stats"] = compression_stats
             return final_results
 
-
         except Exception as e:
-            logging.error(f"Error in RAGEngine.search pipeline: {e}", exc_info=True)
+            logger.error(f"Error in RAGEngine.search pipeline: {e}", exc_info=True)
             tracer.fail_pipeline(str(e))
             empty_res = SearchResultList()
             empty_res.pipeline_trace = tracer.to_dict()
             return empty_res
+
+    def evaluate_confidence(self, ranked: List[Tuple[LCDocument, float]], config: Optional[RAGConfig] = None):
+        """Run the source-confidence gate over (doc, relevance) pairs."""
+        from app.services.confidence_gate import get_confidence_gate
+        doc_ids = list({int(d.metadata["doc_id"]) for d, _ in ranked if d.metadata.get("doc_id") is not None})
+        doc_meta: Dict[int, dict] = {}
+        if doc_ids:
+            for d in self.session.exec(select(Document).where(Document.id.in_(doc_ids))).all():
+                doc_meta[d.id] = {
+                    "file_type": d.filename.rsplit(".", 1)[-1] if "." in d.filename else "unknown",
+                    "upload_date": d.uploaded_at,
+                }
+        chunk_dicts, scores, metas = [], [], []
+        for doc, score in ranked:
+            did = doc.metadata.get("doc_id")
+            chunk_dicts.append({"id": str(did or ""), "text": doc.page_content})
+            scores.append(score)
+            metas.append(doc_meta.get(did, {}) if did else {})
+        threshold = float(getattr(config, "confidence_threshold", None) or 0.4)
+        return get_confidence_gate(threshold=threshold).evaluate(chunk_dicts, scores, metas)

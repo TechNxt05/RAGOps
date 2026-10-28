@@ -1,5 +1,4 @@
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from app.utils.tfidf import cosine, tfidf_vectors
 from typing import List, Tuple, Any
 
 class ContextPruner:
@@ -44,17 +43,9 @@ class ContextPruner:
         # Build TF-IDF
         try:
             # Simple vectorizer
-            vectorizer = TfidfVectorizer(stop_words='english')
-            # Fit on corpus (chunks + query)
-            tfidf_matrix = vectorizer.fit_transform(texts + [query])
-            
-            # Last row is the query
-            query_vector = tfidf_matrix[-1]
-            # Other rows are the chunks
-            chunk_vectors = tfidf_matrix[:-1]
-            
-            # Calculate cosine similarities
-            similarities = cosine_similarity(chunk_vectors, query_vector).flatten()
+            vectors = tfidf_vectors(texts + [query], stop_words="english")
+            # Last vector is the query; the others are the chunks
+            similarities = [cosine(v, vectors[-1]) for v in vectors[:-1]]
             
             pruned_chunks = []
             for idx, score in enumerate(similarities):

@@ -1,31 +1,47 @@
-fastapi
-uvicorn
-gunicorn
-python-multipart
-sqlalchemy
-alembic
-psycopg2-binary
-python-jose[cryptography]
-passlib[bcrypt]
+# Versions pinned to the set the test suite runs against.
+# Default runtime is ONNX (no PyTorch) so the backend fits a 512 MB free host.
+# For the PyTorch backend (MODEL_BACKEND=torch) also install requirements-torch.txt.
+
+# --- API ---
+fastapi==0.127.0
+uvicorn[standard]==0.40.0
+gunicorn==23.0.0
+python-multipart==0.0.21
+httpx==0.28.1
+python-dotenv==1.2.1
+
+# --- Database ---
+sqlalchemy==2.0.45
+sqlmodel==0.0.28
+psycopg2-binary==2.9.11
+pgvector==0.5.1
+
+# --- Auth / crypto ---
+python-jose[cryptography]==3.5.0
+passlib[bcrypt]==1.7.4
 bcrypt==3.2.2
+cryptography==46.0.3
+
+# --- LLM orchestration ---
 langchain==0.2.11
-langchain-community==0.2.10
 langchain-core==0.2.43
+langchain-text-splitters==0.2.2
 langchain-google-genai==1.0.7
 langchain-groq==0.1.6
-faiss-cpu
-tiktoken
-python-dotenv
-asyncpg
-sqlmodel
-pypdf
-sentence-transformers
-langchain-huggingface==0.0.3
-scikit-learn
-rank-bm25==0.2.2
-FlagEmbedding==1.2.9
-langgraph==0.2.76
 langchain-anthropic==0.1.23
 langchain-openai==0.1.25
-mcp
+langgraph==0.2.76
+mcp==1.29.1
 
+# --- Retrieval / ML (local, open-source models via ONNX Runtime) ---
+fastembed==0.9.1
+rank-bm25==0.2.2
+numpy==1.26.4
+
+# --- Ingestion ---
+pypdf==6.5.0
+python-docx==1.2.0
+
+# --- External database connector ---
+sqlglot==30.25.0
+PyMySQL==1.2.3

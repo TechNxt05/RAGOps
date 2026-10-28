@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { getProjects, sendMessage, sendAgenticMessage, getRAGConfig, getDocuments, getSessions, deleteSession, getHistory, Project, RAGConfig, Document, trackCitationClick, type ChatMessageResponse, type QualityScores, type AgenticStep } from '@/lib/api';
+import { getProjects, sendAgenticMessage, streamMessage, getModelCatalog, getDatabases, askDatabase, errorMessage, getRAGConfig, getDocuments, getSessions, deleteSession, getHistory, Project, RAGConfig, Document, trackCitationClick, type ChatMessageResponse, type QualityScores, type AgenticStep, type ChatSource, type DbAnswer, type ExternalDb } from '@/lib/api';
+import { DbAnswerView } from "@/components/DbAnswerView";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -23,10 +24,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 
-interface Source {
-    source: string;
-    doc_id: number;
-}
+type Source = ChatSource;
 
 interface Message {
     role: 'user' | 'assistant';
@@ -44,6 +42,9 @@ interface Message {
     ragas_metrics?: ChatMessageResponse['ragas_metrics'];
     output_contract?: ChatMessageResponse['output_contract'];
     pipeline_trace?: ChatMessageResponse['pipeline_trace'];
+    db_answer?: DbAnswer;
+    streaming?: boolean;
+    cached?: boolean;
 }
 
 export default function ChatPage() {
@@ -64,7 +65,10 @@ export default function ChatPage() {
 
     // Model Config State - Default to Google (Gemini) for better tool support
     const [modelProvider, setModelProvider] = useState<string>('groq');
-    const [modelName, setModelName] = useState<string>('llama-3.3-70b-versatile');
+    const [modelName, setModelName] = useState<string>('openai/gpt-oss-20b');
+    const [catalog, setCatalog] = useState<Record<string, string[]>>({});
+    const [databases, setDatabases] = useState<ExternalDb[]>([]);
+    const [askTarget, setAskTarget] = useState<string>('docs'); // 'docs' or a database id
     const [temperature, setTemperature] = useState<number[]>([0.1]);
     const [historyLimit, setHistoryLimit] = useState<number[]>([5]);
     // const [projectContextLimit, setProjectContextLimit] = useState<number[]>([2]); // Replaced by manual selection
@@ -128,7 +132,15 @@ export default function ChatPage() {
             const data = await getRAGConfig(pid);
             setProjectConfig(data);
         } catch (e) { }
+        try {
+            setDatabases((await getDatabases(pid)).filter((d) => d.is_active && d.allowed_tables.length > 0));
+        } catch { setDatabases([]); }
+        setAskTarget('docs');
     };
+
+    useEffect(() => {
+        if (user) getModelCatalog().then(setCatalog).catch(() => setCatalog({}));
+    }, [user]);
 
     const [isNewChatOpen, setIsNewChatOpen] = useState(false);
     const [newChatTitle, setNewChatTitle] = useState('');
@@ -250,30 +262,102 @@ export default function ChatPage() {
         } catch (e) { toast.error("Failed to load chat"); }
     }
 
+    const toBotMessage = (res: ChatMessageResponse): Message => {
+        let sources = res.sources as Source[] | string | undefined;
+        if (typeof sources === 'string') {
+            try { sources = JSON.parse(sources); } catch { }
+        }
+        return {
+            role: 'assistant',
+            content: res.content,
+            sources: sources as Source[] | undefined,
+            usage_metadata: res.usage_metadata ?? undefined,
+            query_log_id: res.query_log_id ?? undefined,
+            quality: res.quality ?? undefined,
+            agent_trace: res.agent_trace,
+            attempts: res.attempts,
+            strategies_tried: res.strategies_tried,
+            answered: res.answered,
+            conflict_detection: res.conflict_detection ?? undefined,
+            not_found_proof: res.not_found_proof ?? undefined,
+            ragas_metrics: res.ragas_metrics ?? undefined,
+            output_contract: res.output_contract ?? undefined,
+            pipeline_trace: res.pipeline_trace ?? undefined,
+            cached: res.cached,
+        };
+    };
+
     const handleSend = async () => {
-        if (!input.trim() || !selectedProject) return;
+        if (!input.trim() || !selectedProject || isTyping) return;
 
         const userMsg: Message = { role: 'user', content: input };
         setMessages(prev => [...prev, userMsg]);
         setInput('');
         setIsTyping(true);
 
+        // Ask a connected database instead of the documents
+        if (askTarget !== 'docs') {
+            try {
+                const ans = await askDatabase(selectedProject.id, Number(askTarget), userMsg.content);
+                setMessages(prev => [...prev, { role: 'assistant', content: ans.answer, db_answer: ans }]);
+            } catch (e) {
+                setMessages(prev => [...prev, { role: 'assistant', content: errorMessage(e, "The database query failed.") }]);
+            } finally {
+                setIsTyping(false);
+            }
+            return;
+        }
+
+        // Standard mode: stream tokens as they are generated
+        if (!isAgenticMode) {
+            const placeholder: Message = { role: 'assistant', content: '', streaming: true };
+            setMessages(prev => [...prev, placeholder]);
+            const patchLast = (fn: (m: Message) => Message) =>
+                setMessages(prev => prev.map((m, i) => (i === prev.length - 1 ? fn(m) : m)));
+            try {
+                await streamMessage({
+                    content: userMsg.content,
+                    project_id: selectedProject.id,
+                    session_id: sessionId || undefined,
+                    temperature: temperature[0],
+                    model_provider: modelProvider,
+                    model_name: modelName,
+                    history_limit: historyLimit[0],
+                    project_context_limit: 0,
+                    context_session_ids: selectedContextSessions,
+                }, {
+                    onMeta: (meta) => {
+                        setIsTyping(false);
+                        patchLast((m) => ({ ...m, sources: meta.sources }));
+                        if (!sessionId && meta.session_id) setSessionId(meta.session_id);
+                    },
+                    onToken: (delta) => {
+                        setIsTyping(false);
+                        patchLast((m) => ({ ...m, content: m.content + delta }));
+                    },
+                    onDone: (res) => {
+                        patchLast(() => toBotMessage(res));
+                        if (!sessionId) {
+                            setSessionId(res.session_id);
+                            loadSessions(selectedProject.id);
+                        }
+                    },
+                    onError: (detail) => {
+                        patchLast((m) => ({ ...m, streaming: false, content: m.content || detail }));
+                        toast.error(detail);
+                    },
+                });
+            } catch {
+                patchLast((m) => ({ ...m, streaming: false, content: m.content || "Connection lost. Please try again." }));
+                toast.error("Failed to send message");
+            } finally {
+                setIsTyping(false);
+            }
+            return;
+        }
+
         try {
-            // Call either sendAgenticMessage or sendMessage depending on toggle
-            const res = isAgenticMode 
-                ? await sendAgenticMessage(
-                    userMsg.content,
-                    selectedProject.id,
-                    sessionId || undefined,
-                    temperature[0],
-                    modelProvider,
-                    modelName,
-                    historyLimit[0],
-                    0,
-                    selectedContextSessions,
-                    pendingChatTitle || undefined
-                )
-                : await sendMessage(
+            const res = await sendAgenticMessage(
                     userMsg.content,
                     selectedProject.id,
                     sessionId || undefined,
@@ -286,30 +370,7 @@ export default function ChatPage() {
                     pendingChatTitle || undefined
                 );
 
-            let sources = res.sources;
-            if (typeof sources === 'string') {
-                try { sources = JSON.parse(sources); } catch { }
-            }
-
-            const botMsg: Message = {
-                role: 'assistant',
-                content: res.content,
-                sources: sources as Source[] | undefined,
-                usage_metadata: res.usage_metadata ?? undefined,
-                query_log_id: res.query_log_id ?? undefined,
-                quality: res.quality ?? undefined,
-                agent_trace: res.agent_trace,
-                attempts: res.attempts,
-                strategies_tried: res.strategies_tried,
-                answered: res.answered,
-                conflict_detection: res.conflict_detection ?? undefined,
-                not_found_proof: res.not_found_proof ?? undefined,
-                ragas_metrics: res.ragas_metrics ?? undefined,
-                output_contract: res.output_contract ?? undefined,
-                pipeline_trace: res.pipeline_trace ?? undefined,
-            };
-
-            setMessages(prev => [...prev, botMsg]);
+            setMessages(prev => [...prev, toBotMessage(res)]);
             if (!sessionId) {
                 setSessionId(res.session_id);
                 loadSessions(selectedProject.id); // Refresh list to show new session
@@ -461,43 +522,26 @@ export default function ChatPage() {
                                 <Button variant="outline" size="sm" className="ml-1 hidden gap-2 sm:flex">
                                     <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" aria-hidden />
                                     <span className="max-w-[140px] truncate text-xs font-medium">
-                                        {modelProvider === "google" ? "Gemini" : "Groq"} · {modelName}
+                                        {modelProvider} · {modelName}
                                     </span>
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start" className="w-56">
-                                <DropdownMenuItem
-                                    onClick={() => {
-                                        setModelProvider("google");
-                                        setModelName("gemini-1.5-flash");
-                                    }}
-                                >
-                                    Gemini 1.5 Flash
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                    onClick={() => {
-                                        setModelProvider("google");
-                                        setModelName("gemini-1.5-pro");
-                                    }}
-                                >
-                                    Gemini 1.5 Pro
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                    onClick={() => {
-                                        setModelProvider("groq");
-                                        setModelName("llama-3.3-70b-versatile");
-                                    }}
-                                >
-                                    Groq Llama 3.3 70B
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                    onClick={() => {
-                                        setModelProvider("groq");
-                                        setModelName("llama-3.1-8b-instant");
-                                    }}
-                                >
-                                    Groq Llama 3.1 8B
-                                </DropdownMenuItem>
+                            <DropdownMenuContent align="start" className="max-h-80 w-64 overflow-y-auto">
+                                {Object.entries(catalog).flatMap(([provider, names]) =>
+                                    names.map((name) => (
+                                        <DropdownMenuItem
+                                            key={`${provider}|${name}`}
+                                            onClick={() => {
+                                                setModelProvider(provider);
+                                                setModelName(name);
+                                            }}
+                                        >
+                                            <span className="truncate">{name}</span>
+                                            <span className="ml-auto pl-2 text-[10px] text-muted-foreground">{provider}</span>
+                                        </DropdownMenuItem>
+                                    ))
+                                )}
+                                {Object.keys(catalog).length === 0 && <DropdownMenuItem disabled>No models available</DropdownMenuItem>}
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
@@ -523,13 +567,13 @@ export default function ChatPage() {
                                             value={modelProvider}
                                             onChange={(e) => {
                                                 setModelProvider(e.target.value);
-                                                // Set default model for provider
-                                                if (e.target.value === 'google') setModelName('gemini-1.5-flash');
-                                                else setModelName('llama-3.3-70b-versatile');
+                                                const first = catalog[e.target.value]?.[0];
+                                                if (first) setModelName(first);
                                             }}
                                         >
-                                            <option value="google">Google Gemini</option>
-                                            <option value="groq">Groq</option>
+                                            {(Object.keys(catalog).length ? Object.keys(catalog) : ['groq', 'google']).map((p) => (
+                                                <option key={p} value={p}>{p === 'google' ? 'Google Gemini' : p === 'groq' ? 'Groq' : p === 'openrouter' ? 'OpenRouter (free)' : p}</option>
+                                            ))}
                                         </select>
                                     </div>
 
@@ -540,17 +584,8 @@ export default function ChatPage() {
                                             value={modelName}
                                             onChange={(e) => setModelName(e.target.value)}
                                         >
-                                            {modelProvider === 'google' ? (
-                                                <>
-                                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
-                                                    <option value="llama-3.1-8b-instant">Llama 3.1 8B</option>
-                                                </>
-                                            )}
+                                            {!(catalog[modelProvider] || []).includes(modelName) && <option value={modelName}>{modelName}</option>}
+                                            {(catalog[modelProvider] || []).map((m) => <option key={m} value={m}>{m}</option>)}
                                         </select>
                                     </div>
                                     <div className="flex items-center justify-between">
@@ -688,7 +723,9 @@ export default function ChatPage() {
                                                 ? 'bg-indigo-600 text-white rounded-tr-none'
                                                 : 'bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-tl-none'
                                                 }`}>
-                                                {msg.content}
+                                                {msg.db_answer ? <DbAnswerView answer={msg.db_answer} /> : <span className="whitespace-pre-wrap">{msg.content}</span>}
+                                                {msg.streaming && <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-indigo-400 align-middle" />}
+                                                {msg.cached && <span className="mt-2 block text-[10px] uppercase tracking-wider text-emerald-600">⚡ instant answer from cache</span>}
 
                                                 {msg.role === 'assistant' && msg.conflict_detection?.has_conflicts && (
                                                     <div className="mt-3 flex gap-2 items-start bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300 p-3 rounded-2xl border border-amber-200 dark:border-amber-900/40 text-xs">
@@ -927,7 +964,9 @@ export default function ChatPage() {
                                                         }}
                                                     >
                                                         <FileText className="w-3 h-3" />
-                                                        <span className="truncate max-w-[120px]">{src.source}</span>
+                                                        {src.ref != null && <span className="font-semibold">{src.ref}</span>}
+                                                        <span className="truncate max-w-[120px]" title={src.snippet || src.source}>{src.source}</span>
+                                                        {typeof src.score === 'number' && <span className="normal-case text-slate-400">{Math.round(src.score * 100)}%</span>}
                                                     </button>
                                                 ))}
                                             </div>
@@ -990,11 +1029,22 @@ export default function ChatPage() {
                             </div>
                         )}
                         <div className="flex gap-2">
+                            {databases.length > 0 && (
+                                <select
+                                    aria-label="Ask documents or a connected database"
+                                    className="h-12 shrink-0 rounded-full border border-slate-300 bg-slate-50 px-3 text-sm dark:border-slate-700 dark:bg-slate-800"
+                                    value={askTarget}
+                                    onChange={(e) => setAskTarget(e.target.value)}
+                                >
+                                    <option value="docs">Documents</option>
+                                    {databases.map((d) => <option key={d.id} value={String(d.id)}>DB: {d.name}</option>)}
+                                </select>
+                            )}
                             <Input
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                                placeholder={selectedProject ? `Ask about "${selectedProject.name}"...` : "Select a project to start chatting..."}
+                                placeholder={!selectedProject ? "Select a project to start chatting..." : askTarget !== 'docs' ? "Ask a question about the data…" : `Ask about "${selectedProject.name}"...`}
                                 disabled={!selectedProject}
                                 className="flex-1 rounded-full px-6 h-12 border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus-visible:ring-indigo-500 text-base"
                             />

@@ -1,16 +1,38 @@
+"""Download the local open-source models at build time so the first request
+after a deploy (or a wake-up from sleep) doesn't wait on a download.
+
+Uses the configured backend (MODEL_BACKEND, default "onnx") and MODEL_CACHE_DIR,
+so the files land where the running app will look for them.
+"""
+
 import os
-print("Pre-downloading HuggingFace Embedding and Reranker models...")
+import sys
+from pathlib import Path
 
-# Download embedding model
-from langchain_huggingface import HuggingFaceEmbeddings
-print("Downloading sentence-transformers/all-MiniLM-L6-v2...")
-HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+sys.path.insert(0, str(Path(__file__).parent))
 
-# Download BGE Reranker
-print("Downloading BAAI/bge-reranker-base...")
-try:
-    from FlagEmbedding import FlagReranker
-    FlagReranker("BAAI/bge-reranker-base", use_fp16=False)
-    print("Models pre-downloaded and cached successfully!")
-except Exception as e:
-    print(f"Warning: Failed to pre-download FlagReranker: {e}")
+from app.core.config import settings  # noqa: E402
+
+EMBEDDING_MODELS = [m.strip() for m in os.getenv("BAKE_EMBEDDING_MODELS", settings.default_embedding_model).split(",") if m.strip()]
+
+if settings.model_backend == "onnx":
+    from fastembed import TextEmbedding
+    from fastembed.rerank.cross_encoder import TextCrossEncoder
+    from app.services.model_registry import _fastembed_name
+
+    for name in EMBEDDING_MODELS:
+        print(f"Downloading embedding model {name} (ONNX)...")
+        TextEmbedding(_fastembed_name(name), cache_dir=settings.model_cache_dir)
+    if settings.reranker_model.lower() not in ("", "none", "off"):
+        print(f"Downloading reranker {settings.reranker_model} (ONNX)...")
+        TextCrossEncoder(settings.reranker_model, cache_dir=settings.model_cache_dir)
+else:
+    from sentence_transformers import CrossEncoder, SentenceTransformer
+
+    for name in EMBEDDING_MODELS:
+        print(f"Downloading embedding model {name} (torch)...")
+        SentenceTransformer(name)
+    print(f"Downloading reranker {settings.reranker_model} (torch)...")
+    CrossEncoder(settings.reranker_model, max_length=512)
+
+print("Models cached.")

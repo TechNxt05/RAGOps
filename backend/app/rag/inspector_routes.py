@@ -1,10 +1,14 @@
+import dataclasses
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 from typing import List, Optional
 from pydantic import BaseModel
 from app.db import get_session
 from app.models.rag import Document, Chunk
-from app.models.user import User
+from app.models.user import User, UserRole
+from app.auth.access import require_project
 from app.auth.deps import get_current_user
 from app.rag.engine import RAGEngine
 
@@ -38,10 +42,10 @@ def get_document_chunks(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role != "admin":
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
-    chunks = session.exec(select(Chunk).where(Chunk.document_id == document_id)).all()
+
+    chunks = session.exec(select(Chunk).where(Chunk.document_id == document_id).order_by(Chunk.chunk_index, Chunk.id)).all()
     # Simple estimation for tokens if not stored: chars / 4
     return [ChunkDTO(id=c.id, content=c.content, token_count=len(c.content)//4) for c in chunks]
 
@@ -51,43 +55,31 @@ def debug_search(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role != "admin":
+    if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin access required")
-    
-    try:
-        engine = RAGEngine(session)
-        # We use the internal search method directly
-        # search returns list of (Document, score)
-        results = engine.search(
-            query=request.query,
-            project_id=request.project_id,
-            k=request.top_k,
-            score_threshold=request.similarity_threshold
-        )
-        
-        output = []
-        for doc, score in results:
-            filename = doc.metadata.get("source", "Unknown")
-            if "/" in filename or "\\" in filename:
-                filename = filename.split("/")[-1].split("\\")[-1]
+    require_project(session, current_user, request.project_id)
 
-            # Normalize Score for UI (FAISS L2 Distance -> Similarity)
-            try:
-                normalized_score = 1 / (1 + score)
-            except:
-                normalized_score = 0.0
-
-            output.append(DebugSearchResult(
-                chunk_id=0,
-                content=doc.page_content,
-                score=normalized_score,
-                document_name=filename
-            ))
-            
-        return DebugSearchResponse(
-            results=output,
-            query_analysis=getattr(results, "query_analysis", None),
-            pipeline_trace=getattr(results, "pipeline_trace", None)
+    engine = RAGEngine(session)
+    results = engine.search(
+        query=request.query,
+        project_id=request.project_id,
+        k=request.top_k,
+        score_threshold=request.similarity_threshold
+    )
+    output = [
+        DebugSearchResult(
+            chunk_id=int(doc.metadata.get("chunk_id") or 0),
+            content=doc.page_content,
+            score=round(float(score), 4),  # calibrated relevance in [0, 1]
+            document_name=str(doc.metadata.get("source", "Unknown")).replace("\\", "/").split("/")[-1],
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        for doc, score in results
+    ]
+    analysis = getattr(results, "query_analysis", None)
+    if analysis is not None and dataclasses.is_dataclass(analysis):
+        analysis = json.loads(json.dumps(dataclasses.asdict(analysis), default=lambda o: getattr(o, "value", str(o))))
+    return DebugSearchResponse(
+        results=output,
+        query_analysis=analysis,
+        pipeline_trace=json.loads(json.dumps(getattr(results, "pipeline_trace", None), default=str)),
+    )

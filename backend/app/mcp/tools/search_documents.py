@@ -1,44 +1,28 @@
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
+from sqlmodel import Session
+from starlette.concurrency import run_in_threadpool
+
+from app.db import engine
 from app.mcp.schemas import MCPContext
 from app.rag.engine import RAGEngine
-from app.db import engine
-from sqlmodel import Session
+
 
 class SearchDocumentsInput(BaseModel):
     query: str = Field(..., description="The query string to search for")
     top_k: int = Field(default=4, description="Number of results to return")
 
-async def search_documents_tool(args: SearchDocumentsInput, context: MCPContext):
-    if not context.project_id:
-        return {"error": "Project ID required for search"}
-    
-    print(f"DEBUG: Entering search_documents_tool with query='{args.query}'")
-        
+
+def _search(args: SearchDocumentsInput, project_id: int) -> dict:
     with Session(engine) as session:
         rag_engine = RAGEngine(session)
-        # Get config to check threshold
-        try:
-            config = rag_engine.get_active_config(context.project_id)
-            threshold = config.similarity_threshold
-        except:
-            threshold = 0.0
-            
+        config = rag_engine._config_or_default(project_id)
         results = rag_engine.search(
-            query=args.query, 
-            project_id=context.project_id, 
-            k=args.top_k,
-            score_threshold=threshold
+            query=args.query, project_id=project_id, k=args.top_k, score_threshold=config.similarity_threshold,
         )
-        
-        # Format results
         return {
             "chunks": [
-                {
-                    "content": doc.page_content,
-                    "score": score,
-                    "source": doc.metadata.get("source"),
-                    "doc_id": doc.metadata.get("doc_id"),
-                }
+                {"content": doc.page_content, "score": score, "source": doc.metadata.get("source"),
+                 "doc_id": doc.metadata.get("doc_id")}
                 for doc, score in results
             ],
             "chunks_before_pruning": getattr(results, "chunks_before_pruning", 0),
@@ -46,3 +30,9 @@ async def search_documents_tool(args: SearchDocumentsInput, context: MCPContext)
             "pruning_reduction_pct": getattr(results, "pruning_reduction_pct", 0.0),
             "used_hybrid_search": getattr(results, "used_hybrid_search", False),
         }
+
+
+async def search_documents_tool(args: SearchDocumentsInput, context: MCPContext):
+    if not context.project_id:
+        return {"error": "Project ID required for search"}
+    return await run_in_threadpool(_search, args, context.project_id)

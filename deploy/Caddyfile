@@ -1,0 +1,12 @@
+# Reverse proxy with automatic HTTPS for the RAGOps backend.
+# API_DOMAIN comes from .env, e.g. ragops-yourname.duckdns.org
+{$API_DOMAIN} {
+	encode gzip
+	reverse_proxy backend:8000 {
+		# Stream chat tokens immediately instead of buffering them
+		flush_interval -1
+	}
+	request_body {
+		max_size 150MB
+	}
+}

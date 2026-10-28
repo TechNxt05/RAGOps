@@ -7,9 +7,7 @@ from __future__ import annotations
 
 from typing import List, Dict
 
-import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from app.utils.tfidf import cosine, tfidf_vectors
 
 
 def _max_grounding_similarity(response: str, context_chunks: List[str]) -> float:
@@ -18,14 +16,10 @@ def _max_grounding_similarity(response: str, context_chunks: List[str]) -> float
         return 0.0
 
     corpus = context_chunks + [response]
-    vectorizer = TfidfVectorizer(stop_words="english", max_features=500)
-
     try:
-        tfidf_matrix = vectorizer.fit_transform(corpus)
-        response_vec = tfidf_matrix[-1]
-        context_vecs = tfidf_matrix[:-1]
-        similarities = cosine_similarity(response_vec, context_vecs)[0]
-        return float(np.max(similarities)) if similarities.size else 0.5
+        vectors = tfidf_vectors(corpus, stop_words="english", max_features=500)
+        similarities = [cosine(vectors[-1], v) for v in vectors[:-1]]
+        return max(similarities) if similarities else 0.5
     except Exception:
         return 0.0
 

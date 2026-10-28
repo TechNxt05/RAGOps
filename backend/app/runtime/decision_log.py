@@ -54,7 +54,7 @@ class DecisionLogger:
             chosen_backend=plan.get("retrieval_strategy", "hybrid"),
             top_k=plan.get("retrieval_top_k", 10),
             reranker_enabled=plan.get("reranking", True),
-            selected_model=plan.get("model", "groq/llama3-70b-8192"),
+            selected_model=plan.get("model", "groq/openai/gpt-oss-20b"),
             reasoning_effort=plan.get("reasoning_effort", "STANDARD"),
             verification_level=plan.get("verification_level", "STANDARD"),
             early_exit_triggered=early_exit,

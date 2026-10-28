@@ -23,7 +23,7 @@ class ExecutionPlan(BaseModel):
     query_rewriting: bool = Field(default=True)
     context_compression: bool = Field(default=True)
     
-    model: str = Field(default="groq/llama3-70b-8192")
+    model: str = Field(default="groq/openai/gpt-oss-20b")
     reasoning_effort: Literal["LOW", "STANDARD", "HIGH"] = Field(default="STANDARD")
     
     verification_level: Literal["BASIC", "STANDARD", "STRICT"] = Field(default="STANDARD")

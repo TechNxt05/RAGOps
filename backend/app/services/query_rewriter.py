@@ -1,5 +1,24 @@
 from typing import List, Optional
+import re
+
 from app.utils.llm_response import extract_text
+
+
+def sanitize_query(text: str, original: str) -> str:
+    """Reduce an LLM rewrite to ONE search query. Small models sometimes return a
+    list of keyword variants; those inflate cross-encoder scores out of distribution."""
+    text = (text or "").strip().strip('"').strip()
+    for line in text.splitlines():
+        if line.strip():
+            text = line.strip()
+            break
+    text = re.split(r"\s*[;|]\s*", text)[0]
+    text = re.sub(r"^(standalone query|search query|query|rewritten query)\s*:\s*", "", text, flags=re.I).strip()
+    max_words = max(12, 2 * len(original.split()) + 8)
+    words = text.split()
+    if len(words) > max_words:
+        text = " ".join(words[:max_words])
+    return text or original
 
 class QueryRewriter:
     def __init__(self, llm_client):
@@ -31,7 +50,7 @@ Original query: {query}
 Diversified search query:"""
             
             response = await self.llm.ainvoke(prompt)
-            rewritten = extract_text(response.content)
+            rewritten = sanitize_query(extract_text(response.content), query)
             
             return {
                 "original_query": query,
@@ -69,7 +88,7 @@ Standalone query:"""
         
         # We assume the llm_client has an ainvoke method like LangChain Chat Models
         response = await self.llm.ainvoke(prompt)
-        rewritten = extract_text(response.content)
+        rewritten = sanitize_query(extract_text(response.content), query)
         
         return {
             "original_query": query,
@@ -79,7 +98,7 @@ Standalone query:"""
         }
     
     def _needs_rewriting(self, query: str) -> bool:
-        pronouns = ["it", "its", "they", "their", "this", "that", "these",
-                   "those", "he", "she", "him", "her", "the same", "the above"]
+        pronouns = ["it", "its", "they", "them", "their", "theirs", "this", "that", "these",
+                   "those", "he", "she", "him", "her", "his", "the same", "the above", "there", "then"]
         query_lower = query.lower()
         return any(f" {p} " in f" {query_lower} " for p in pronouns)
