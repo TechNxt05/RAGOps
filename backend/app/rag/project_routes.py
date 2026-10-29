@@ -5,15 +5,11 @@ from pydantic import BaseModel, Field
 from app.auth.access import readable_project_ids, require_project
 from app.db import get_session
 from app.jobs import queue
-from app.models.rag import (
-    Project, RAGConfig, Document, Chunk, ChunkEmbedding, ProjectMember, ProjectApiKey,
-    ExternalDatabase, IngestionJob, SemanticCacheEntry,
-)
-from app.models.chat import ChatSession, Message
-from app.models.query_log import QueryLog
-from app.models.usage import TokenUsage
+from app.models.rag import Project, RAGConfig, ProjectMember
 from app.models.user import User
-from app.auth.deps import get_current_user, get_current_admin
+from app.models.workspace import Workspace
+from app.auth.deps import get_current_user, get_current_admin, get_current_workspace
+from app.services import workspaces
 from app.services.model_registry import normalize_model_name
 
 # Admin routes for managing projects
@@ -23,7 +19,8 @@ router = APIRouter(prefix="/rag/projects", tags=["rag-projects"])
 class ProjectCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: Optional[str] = None
-    visibility: str = Field(default="all_users", pattern="^(all_users|members_only)$")
+    # New projects are private to the members the admin assigns.
+    visibility: str = Field(default="members_only", pattern="^(all_users|members_only)$")
 
 
 class ProjectUpdate(BaseModel):
@@ -149,8 +146,17 @@ def patch_project_pipeline(
 
 
 @router.post("/", response_model=Project)
-def create_project(body: ProjectCreate, session: Session = Depends(get_session), current_user: User = Depends(get_current_admin)):
-    project = Project(name=body.name, description=body.description, visibility=body.visibility, owner_id=current_user.id)
+def create_project(
+    body: ProjectCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_admin),
+    workspace: Workspace = Depends(get_current_workspace),
+):
+    workspaces.check_project_limit(session, workspace)
+    # In the shared demo every project is open to the demo client.
+    visibility = "all_users" if workspace.is_demo else body.visibility
+    project = Project(name=body.name, description=body.description, visibility=visibility,
+                      owner_id=current_user.id, workspace_id=workspace.id)
     session.add(project)
     session.commit()
     session.refresh(project)
@@ -163,10 +169,9 @@ def create_project(body: ProjectCreate, session: Session = Depends(get_session),
 @router.get("/", response_model=List[Project])
 def list_projects(session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
     ids = readable_project_ids(session, current_user)
-    query = select(Project).order_by(Project.created_at.desc())
-    if ids is not None:
-        query = query.where(Project.id.in_(ids))
-    return session.exec(query).all()
+    if not ids:
+        return []
+    return session.exec(select(Project).where(Project.id.in_(ids)).order_by(Project.created_at.desc())).all()
 
 
 @router.get("/{project_id}", response_model=Project)
@@ -177,7 +182,10 @@ def get_project(project_id: int, session: Session = Depends(get_session), curren
 @router.patch("/{project_id}", response_model=Project)
 def update_project(project_id: int, body: ProjectUpdate, session: Session = Depends(get_session), current_user: User = Depends(get_current_admin)):
     project = require_project(session, current_user, project_id, write=True)
-    for key, value in body.model_dump(exclude_unset=True).items():
+    workspace = session.get(Workspace, project.workspace_id)
+    if workspace and workspace.is_demo:
+        body.visibility = None
+    for key, value in body.model_dump(exclude_unset=True, exclude_none=True).items():
         setattr(project, key, value)
     session.add(project)
     session.commit()
@@ -198,11 +206,10 @@ def list_members(project_id: int, session: Session = Depends(get_session), curre
 
 @router.post("/{project_id}/members")
 def add_member(project_id: int, body: MemberIn, session: Session = Depends(get_session), current_user: User = Depends(get_current_admin)):
-    require_project(session, current_user, project_id)
-    user = session.exec(select(User).where(User.email == body.email.strip().lower())).first() \
-        or session.exec(select(User).where(User.email == body.email.strip())).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="No user with that email. Create the account first.")
+    project = require_project(session, current_user, project_id)
+    user = workspaces.find_user(session, body.email)
+    if not user or user.workspace_id != project.workspace_id:
+        raise HTTPException(status_code=404, detail="No one with that email is in this workspace. Invite them first.")
     member = session.exec(
         select(ProjectMember).where(ProjectMember.project_id == project_id).where(ProjectMember.user_id == user.id)
     ).first()
@@ -225,23 +232,7 @@ def remove_member(project_id: int, user_id: int, session: Session = Depends(get_
 
 @router.delete("/{project_id}")
 def delete_project(project_id: int, session: Session = Depends(get_session), current_user: User = Depends(get_current_admin)):
-    project = session.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    doc_ids = list(session.exec(select(Document.id).where(Document.project_id == project_id)).all())
-    session_ids = list(session.exec(select(ChatSession.id).where(ChatSession.project_id == project_id)).all())
-
-    session.exec(delete(ChunkEmbedding).where(ChunkEmbedding.project_id == project_id))
-    if doc_ids:
-        session.exec(delete(Chunk).where(Chunk.document_id.in_(doc_ids)))
-    session.exec(delete(QueryLog).where(QueryLog.project_id == project_id))
-    if session_ids:
-        session.exec(delete(Message).where(Message.session_id.in_(session_ids)))
-        session.exec(delete(ChatSession).where(ChatSession.id.in_(session_ids)))
-    session.exec(delete(Document).where(Document.project_id == project_id))
-    for model in (RAGConfig, ProjectMember, ProjectApiKey, ExternalDatabase, IngestionJob, SemanticCacheEntry, TokenUsage):
-        session.exec(delete(model).where(model.project_id == project_id))
-    session.delete(project)
+    require_project(session, current_user, project_id, write=True)
+    workspaces.purge_project(session, project_id)
     session.commit()
     return {"ok": True}

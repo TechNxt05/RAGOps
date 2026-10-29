@@ -11,3 +11,5 @@ class User(SQLModel, table=True):
     email: str = Field(index=True, unique=True)
     hashed_password: str
     role: UserRole = Field(default=UserRole.CLIENT)
+    # Admin/client roles apply inside this workspace only.
+    workspace_id: Optional[int] = Field(default=None, index=True)

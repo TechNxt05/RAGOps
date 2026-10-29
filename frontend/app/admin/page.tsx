@@ -223,8 +223,14 @@ export default function AdminDashboard() {
                     <div className="text-xs text-muted-foreground text-center py-4">No projects yet</div>
                 )}
             </div>
+            <Button variant="outline" className="mt-4 w-full gap-2 text-xs" asChild>
+                <Link href="/workspace">
+                    <Users className="h-4 w-4" />
+                    Workspace &amp; team
+                </Link>
+            </Button>
             {selectedProject && (
-                <div className="mt-4 space-y-2">
+                <div className="mt-2 space-y-2">
                     <Button variant="outline" className="w-full gap-2 text-xs" asChild>
                         <Link href={`/analytics/${selectedProject.id}`}>
                             <BarChart3 className="h-4 w-4" />
@@ -247,7 +253,10 @@ export default function AdminDashboard() {
             {/* Desktop Sidebar */}
             <div className="w-64 bg-white dark:bg-slate-900 border-r hidden md:flex flex-col p-4">
                 <div className="flex items-center justify-between mb-8">
-                    <h1 className="font-bold text-xl tracking-tight text-indigo-600">RAGOps</h1>
+                    <div className="min-w-0">
+                        <h1 className="font-bold text-xl tracking-tight text-indigo-600">RAGOps</h1>
+                        {user.workspace && <p className="truncate text-xs text-muted-foreground">{user.workspace.name}</p>}
+                    </div>
                     <Button variant="ghost" size="icon" onClick={logout} title="Logout">
                         <span className="sr-only">Logout</span>
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-log-out w-5 h-5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" x2="9" y1="12" y2="12" /></svg>
@@ -275,6 +284,11 @@ export default function AdminDashboard() {
                 </header>
 
                 <div className="flex-1 p-4 md:p-8 overflow-y-auto">
+                {user.workspace?.is_demo && (
+                    <div className="max-w-6xl mx-auto mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
+                        Public demo: shared with other visitors and reset daily. Projects you create here are visible to the demo client.
+                    </div>
+                )}
                 {selectedProject ? (
                     <div className="max-w-6xl mx-auto space-y-6">
                         <div className="flex items-center justify-between">

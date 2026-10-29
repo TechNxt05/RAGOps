@@ -6,9 +6,10 @@ Allows 1-click selection in AutoRAGBench and throughout the RAGOps platform with
 requiring manual script or environment modifications.
 """
 
-import os
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
+
+from app.core import llm_keys
 
 
 class ModelProfile(BaseModel):
@@ -145,9 +146,9 @@ def get_available_profiles() -> List[Dict]:
     """
     Returns list of model profiles annotated with live API key availability.
     """
-    has_openrouter = bool(os.getenv("OPENROUTER_API_KEY"))
-    has_gemini = bool(os.getenv("GEMINI_API_KEY"))
-    has_groq = bool(os.getenv("GROQ_API_KEY"))
+    has_openrouter = bool(llm_keys.get_key("openrouter"))
+    has_gemini = bool(llm_keys.get_key("google"))
+    has_groq = bool(llm_keys.get_key("groq"))
 
     results = []
     for profile in MODEL_PROFILES.values():

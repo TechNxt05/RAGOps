@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from app.auth.access import require_project
+from app.auth.access import require_not_demo_project, require_project
 from app.auth.deps import get_current_user
 from app.db import get_session
 from app.models.rag import ProjectApiKey
@@ -33,7 +33,8 @@ def list_keys(project_id: int, session: Session = Depends(get_session), user: Us
 
 @router.post("")
 def new_key(project_id: int, body: KeyCreate, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
-    require_project(session, user, project_id, write=True)
+    project = require_project(session, user, project_id, write=True)
+    require_not_demo_project(session, project, "Creating API keys")
     record, plaintext = create_key(session, project_id, body.name, user.id)
     return {"id": record.id, "name": record.name, "prefix": record.key_prefix,
             "key": plaintext, "note": "Copy this key now; it will not be shown again."}

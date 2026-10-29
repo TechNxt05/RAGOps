@@ -147,20 +147,24 @@ class APIKeyAuth:
         from app.services.api_keys import resolve_key
 
         def _resolve():
+            from app.core import llm_keys
             with Session(engine) as db:
                 record = resolve_key(db, key)
                 if record and db.get(Project, record.project_id):
-                    return record.project_id
-                return None
+                    return record.project_id, llm_keys.scope_for_project(db, record.project_id)
+                return None, None
 
-        project_id = await run_in_threadpool(_resolve) if key else None
+        project_id, keys = await run_in_threadpool(_resolve) if key else (None, None)
         if project_id is None:
             response = JSONResponse({"error": "Invalid or missing API key"}, status_code=401,
                                     headers={"WWW-Authenticate": "Bearer"})
             return await response(scope, receive, send)
+        from app.core import llm_keys
         token = _project_id.set(project_id)
         try:
-            await self.app(scope, receive, send)
+            # The key's project decides whose LLM keys the tools may use.
+            with llm_keys.scope(keys):
+                await self.app(scope, receive, send)
         finally:
             _project_id.reset(token)
 

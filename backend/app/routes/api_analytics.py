@@ -8,7 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from app.auth.access import require_project, same_workspace
 from app.auth.deps import get_current_user, get_current_admin
+from app.models.rag import Project
 from app.db import get_session
 from app.models.query_log import QueryLog
 from app.models.user import User, UserRole
@@ -30,8 +32,10 @@ def track_citation_click(
     log = session.get(QueryLog, req.query_log_id)
     if not log:
         return {"ok": True}
-    if current_user.role != UserRole.ADMIN and log.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not allowed")
+    if log.user_id != current_user.id:
+        project = session.get(Project, log.project_id) if log.project_id else None
+        if current_user.role != UserRole.ADMIN or project is None or not same_workspace(current_user, project):
+            raise HTTPException(status_code=403, detail="Not allowed")
     log.citations_clicked += 1
     session.add(log)
     session.commit()
@@ -45,6 +49,7 @@ def get_project_analytics(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_admin),
 ) -> dict[str, Any]:
+    require_project(session, current_user, project_id)
     since = datetime.utcnow() - timedelta(days=days)
     logs = session.exec(
         select(QueryLog).where(QueryLog.project_id == project_id).where(QueryLog.created_at >= since)
@@ -325,6 +330,7 @@ def list_executions(
     current_user: User = Depends(get_current_admin),
 ) -> list[dict[str, Any]]:
     """Recent real pipeline executions (one per answered question) for the trace viewer."""
+    require_project(session, current_user, project_id)
     rows = session.exec(
         select(QueryLog).where(QueryLog.project_id == project_id)
         .order_by(QueryLog.created_at.desc()).limit(max(1, min(limit, 200)))

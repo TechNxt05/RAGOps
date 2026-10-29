@@ -56,10 +56,24 @@ class Settings:
             )
         self.secret_key = secret
         self.access_token_expire_minutes = _int("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 12)
-        # Self-registration always creates CLIENT users; the very first account
-        # becomes ADMIN only when this is enabled (bootstrap of a fresh install).
+        # Registering creates a new workspace with the registrant as its admin
+        # (invite links join an existing one instead). When enabled, the very first
+        # account on a fresh install also gets the server's own LLM keys. Production
+        # should create the owner via ADMIN_EMAIL/ADMIN_PASSWORD instead.
         self.first_user_is_admin = _bool("FIRST_USER_IS_ADMIN", True)
         self.allow_self_registration = _bool("ALLOW_SELF_REGISTRATION", True)
+
+        # --- Workspaces & demo ---------------------------------------------
+        # One-click "Try as demo admin / client" logins into a shared, restricted
+        # workspace that uses the server's LLM keys. Demo projects are deleted
+        # DEMO_RESET_HOURS after creation.
+        self.demo_mode = _bool("DEMO_MODE", False)
+        self.demo_reset_hours = max(1, _int("DEMO_RESET_HOURS", 24))
+        # Storage guards for the free database (Neon free: 0.5 GB). They don't
+        # apply to the platform owner's workspace. 0 disables a limit.
+        self.workspace_max_projects = _int("WORKSPACE_MAX_PROJECTS", 10)
+        self.workspace_max_documents = _int("WORKSPACE_MAX_DOCUMENTS", 100)
+        self.workspace_max_members = _int("WORKSPACE_MAX_MEMBERS", 50)
 
         # --- CORS -----------------------------------------------------------
         default_origins = [

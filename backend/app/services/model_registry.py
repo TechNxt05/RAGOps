@@ -9,11 +9,11 @@ so concurrent first requests don't load it twice.
 
 import logging
 import math
-import os
 import threading
 from collections import OrderedDict
 from typing import Callable, Dict, List, Optional
 
+from app.core import llm_keys
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ def get_embedder(model_name: Optional[str] = None):
         if is_remote_model(name):
             from langchain_google_genai import GoogleGenerativeAIEmbeddings
             model_id = name if name.startswith("models/") else f"models/{name}"
-            embedder = GoogleGenerativeAIEmbeddings(model=model_id, google_api_key=os.getenv("GEMINI_API_KEY"))
+            embedder = GoogleGenerativeAIEmbeddings(model=model_id, google_api_key=llm_keys.get_key("google"))
         elif settings.model_backend == "onnx":
             logger.info("Loading embedding model %s (ONNX)", name)
             embedder = _OnnxEmbedder(name)

@@ -296,7 +296,7 @@ export const getProjects = async () => {
 export const createProject = async (
   name: string,
   description: string,
-  visibility: "all_users" | "members_only" = "all_users"
+  visibility: "all_users" | "members_only" = "members_only"
 ) => {
   const response = await api.post<Project>('/rag/projects/', { name, description, visibility });
   return response.data;
@@ -879,3 +879,88 @@ export const getExecutions = async (projectId: number, limit = 50) =>
   (await api.get<Execution[]>(`/api/analytics/${projectId}/executions`, { params: { limit } })).data;
 
 export const deleteUser = async (userId: number) => (await api.delete(`/auth/users/${userId}`)).data;
+
+// ---------------------------------------------------------------------------
+// Workspaces, invites, demo
+// ---------------------------------------------------------------------------
+
+export type LlmProvider = "groq" | "google" | "openrouter";
+
+export interface WorkspaceMember {
+  id: number;
+  email: string;
+  role: "admin" | "client";
+  is_owner: boolean;
+  project_ids: number[];
+}
+
+export interface WorkspaceInvite {
+  id: number;
+  email: string;
+  role: "admin" | "client";
+  project_ids: number[];
+  created_at: string;
+  expires_in_days: number;
+}
+
+export interface WorkspaceInfo {
+  id: number;
+  name: string;
+  is_demo: boolean;
+  uses_platform_keys: boolean;
+  llm_keys: Record<LlmProvider, string | null>;
+  limits: { projects: number; documents: number; members: number } | null;
+  projects: { id: number; name: string; visibility: "all_users" | "members_only" }[];
+  members: WorkspaceMember[];
+  invites: WorkspaceInvite[];
+}
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  invite_token?: string;
+  workspace_name?: string;
+  llm_keys?: Partial<Record<LlmProvider, string>>;
+  client_emails?: string[];
+}
+
+export interface RegisterResult extends UserInfo {
+  joined_existing_workspace: boolean;
+  workspace_name: string | null;
+  invites: { email: string; token: string }[];
+}
+
+/** The link a new member opens to join (token is shown once). */
+export const inviteLink = (token: string) =>
+  `${typeof window !== 'undefined' ? window.location.origin : ''}/login?invite=${encodeURIComponent(token)}`;
+
+export const register = async (req: RegisterRequest) =>
+  (await api.post<RegisterResult>('/auth/register', req)).data;
+
+export const getInviteInfo = async (token: string) =>
+  (await api.get<{ email: string; workspace_name: string | null; role: string }>(`/auth/invite/${encodeURIComponent(token)}`)).data;
+
+export const getDemoStatus = async () =>
+  (await api.get<{ enabled: boolean; reset_hours: number }>('/auth/demo')).data;
+
+export const demoLogin = async (role: "admin" | "client") =>
+  (await api.post<{ access_token: string }>('/auth/demo', { role })).data.access_token;
+
+export const getWorkspace = async () => (await api.get<WorkspaceInfo>('/workspace')).data;
+
+export const renameWorkspace = async (name: string) => (await api.patch<WorkspaceInfo>('/workspace', { name })).data;
+
+export const updateWorkspaceKeys = async (keys: Partial<Record<LlmProvider, string>>) =>
+  (await api.put<WorkspaceInfo>('/workspace/keys', keys)).data;
+
+export const createInvite = async (email: string, role: "admin" | "client", projectIds: number[]) =>
+  (await api.post<{ id: number; email: string; role: string; token: string }>('/workspace/invites',
+    { email, role, project_ids: projectIds })).data;
+
+export const regenerateInviteLink = async (inviteId: number) =>
+  (await api.post<{ id: number; email: string; token: string }>(`/workspace/invites/${inviteId}/link`)).data;
+
+export const deleteInvite = async (inviteId: number) => (await api.delete(`/workspace/invites/${inviteId}`)).data;
+
+export const setMemberProjects = async (userId: number, projectIds: number[]) =>
+  (await api.put<WorkspaceInfo>(`/workspace/members/${userId}/projects`, { project_ids: projectIds })).data;

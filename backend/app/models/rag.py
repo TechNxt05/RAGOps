@@ -20,10 +20,11 @@ class Project(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     kb_version: int = Field(default=1)
     kb_version_updated_at: Optional[datetime] = Field(default=None)
-    # "all_users": every signed-in user may chat with the project (legacy behaviour).
-    # "members_only": only admins and users listed in ProjectMember.
+    # "all_users": every user in the project's workspace may chat with it.
+    # "members_only": only workspace admins and users listed in ProjectMember.
     visibility: str = Field(default="all_users", max_length=32)
     owner_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    workspace_id: Optional[int] = Field(default=None, index=True)
 
 
 class ProjectMember(SQLModel, table=True):

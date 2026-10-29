@@ -73,7 +73,8 @@ Service → **Environment** → add or update:
 | `SECRET_KEY` | a long random string (see below); keep it forever once set |
 | `ADMIN_EMAIL` | your email |
 | `ADMIN_PASSWORD` | a strong password (8+ characters) |
-| `GROQ_API_KEY` / `GEMINI_API_KEY` / `OPENROUTER_API_KEY` | your keys |
+| `GROQ_API_KEY` / `GEMINI_API_KEY` / `OPENROUTER_API_KEY` | your keys (used only by your own workspace and the demo) |
+| `DEMO_MODE` | `1` to show the one-click demo buttons on the login page |
 | `MODEL_BACKEND` | `onnx` |
 | `MODEL_CACHE_DIR` | `./.models` |
 | `HF_HUB_OFFLINE` | `1` |
@@ -122,9 +123,11 @@ Vercel → your project → **Settings → Environment Variables** →
 
 ## Step 7: First login and clean-up
 
-1. Log in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
-2. **Admin → Access & Integrations → Accounts:** delete `admin@ragops.com` and
-   `client@ragops.com` if they're listed. They had public default passwords.
+1. Log in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`. Everything that existed before workspaces
+   is now in **Main workspace**, which runs on your Render keys.
+2. **Workspace & team:** delete `admin@ragops.com` and `client@ragops.com` if they're listed.
+   Logins with their old public passwords are already refused. The demo buttons use separate
+   `demo-admin@ragops.demo` / `demo-client@ragops.demo` accounts that have no password at all.
 3. **Admin → RAG Configuration:** review each project's models and techniques.
 4. Ask a question in **Chat**. The answer streams with numbered sources, and
    **Executions** shows the real timing of each step.

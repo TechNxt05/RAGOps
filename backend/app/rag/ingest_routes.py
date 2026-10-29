@@ -8,8 +8,9 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlmodel import Session, func, select
 
-from app.auth.access import require_project
+from app.auth.access import project_workspace, require_project
 from app.auth.deps import get_current_user
+from app.services import workspaces
 from app.core.config import settings
 from app.core.rate_limit import rate_limiter
 from app.db import get_session
@@ -58,7 +59,7 @@ async def upload_documents(
     """Accept one or many files. Each file is validated, de-duplicated and queued
     for background parsing + indexing; the response returns immediately with a
     per-file result. A bad file never fails the whole batch."""
-    require_project(session, current_user, project_id, write=True)
+    project = require_project(session, current_user, project_id, write=True)
     rate_limiter.check(f"upload:{current_user.id}", settings.rate_limit_upload_per_min)
 
     uploads = list(files) + ([file] if file is not None else [])
@@ -66,6 +67,7 @@ async def upload_documents(
         raise HTTPException(status_code=400, detail="No files provided")
     if len(uploads) > settings.max_files_per_upload:
         raise HTTPException(status_code=400, detail=f"At most {settings.max_files_per_upload} files per upload")
+    workspaces.check_document_limit(session, project_workspace(session, project), len(uploads))
 
     max_bytes = settings.max_upload_mb * 1024 * 1024
     results = []

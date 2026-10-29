@@ -5,13 +5,13 @@ Implements automatic provider fallback, retry logic, rate-limit resilience, and 
 Ensures zero frontend crashes and uninterrupted user experience even if a provider hits quota limits.
 """
 
-import os
 import asyncio
 import logging
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
 import app.utils.httpx_patch
+from app.core import llm_keys
 from app.utils.llm_response import extract_text
 
 logger = logging.getLogger("LiteLLMGateway")
@@ -66,11 +66,7 @@ class LiteLLMGateway:
             attempt_count += 1
 
             # Check if required API key is configured
-            if provider == "groq" and not os.getenv("GROQ_API_KEY"):
-                continue
-            if provider == "google" and not os.getenv("GEMINI_API_KEY"):
-                continue
-            if provider == "openrouter" and not os.getenv("OPENROUTER_API_KEY"):
+            if not llm_keys.get_key(provider.lower()):
                 continue
 
             try:
@@ -110,7 +106,7 @@ class LiteLLMGateway:
             from langchain_groq import ChatGroq
             client = ChatGroq(
                 model_name=model_name,
-                api_key=os.getenv("GROQ_API_KEY"),
+                api_key=llm_keys.get_key("groq"),
                 temperature=temperature,
                 max_tokens=min(max_tokens, 1024),
             )
@@ -118,7 +114,7 @@ class LiteLLMGateway:
             return extract_text(res.content)
         elif prov == "openrouter":
             from langchain_openai import ChatOpenAI
-            api_key = os.getenv("OPENROUTER_API_KEY")
+            api_key = llm_keys.get_key("openrouter")
             client = ChatOpenAI(
                 model=model_name,
                 api_key=api_key,
@@ -134,7 +130,7 @@ class LiteLLMGateway:
             from langchain_google_genai import ChatGoogleGenerativeAI
             client = ChatGoogleGenerativeAI(
                 model=model_name if "gemini" in model_name else "gemini-2.5-flash-lite",
-                google_api_key=os.getenv("GEMINI_API_KEY"),
+                google_api_key=llm_keys.get_key("google"),
                 temperature=temperature,
                 max_output_tokens=max_tokens,
             )

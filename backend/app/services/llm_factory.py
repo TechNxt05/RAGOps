@@ -7,28 +7,20 @@ rate-limited free-tier model (HTTP 429) transparently rolls over to the next one
 """
 
 import logging
-import os
 import threading
 import time
 from typing import Any, Dict, List, Optional
+
+from app.core import llm_keys
 
 logger = logging.getLogger(__name__)
 
 SUPPORTED_PROVIDERS = ("groq", "google", "openrouter", "openai", "anthropic")
 REQUEST_TIMEOUT_S = 90
 
-_PROVIDER_KEYS = {
-    "groq": "GROQ_API_KEY",
-    "google": "GEMINI_API_KEY",
-    "openrouter": "OPENROUTER_API_KEY",
-    "openai": "OPENAI_API_KEY",
-    "anthropic": "ANTHROPIC_API_KEY",
-}
-
-
 def provider_available(provider: str) -> bool:
-    env = _PROVIDER_KEYS.get(provider)
-    return bool(env and os.getenv(env))
+    """Whether the current workspace has a key for this provider."""
+    return bool(llm_keys.get_key(provider))
 
 
 def infer_provider(model_name: str) -> str:
@@ -59,7 +51,8 @@ def build_chat_model(
     fast=True minimises hidden reasoning on reasoning models (for mechanical
     utility calls such as query rewriting, never for answer generation)."""
     provider = (provider or infer_provider(name)).lower()
-    key = (provider, name, round(float(temperature), 3), max_tokens, streaming, fast)
+    # The key set is part of the cache key: workspaces never share clients.
+    key = (llm_keys.fingerprint(), provider, name, round(float(temperature), 3), max_tokens, streaming, fast)
     cached = _model_cache.get(key)
     if cached is not None:
         return cached
@@ -89,32 +82,32 @@ def _build_chat_model(provider: str, name: str, temperature: float, max_tokens: 
     if provider == "groq":
         from langchain_groq import ChatGroq
         return ChatGroq(
-            model_name=name, api_key=os.getenv("GROQ_API_KEY"), max_tokens=max_tokens,
+            model_name=name, api_key=llm_keys.get_key("groq"), max_tokens=max_tokens,
             timeout=REQUEST_TIMEOUT_S, max_retries=1, streaming=streaming,
             **_reasoning_kwargs(provider, name, fast), **common,
         )
     if provider == "openrouter":
         from langchain_openai import ChatOpenAI
         return ChatOpenAI(
-            model=name, api_key=os.getenv("OPENROUTER_API_KEY"), base_url="https://openrouter.ai/api/v1",
+            model=name, api_key=llm_keys.get_key("openrouter"), base_url="https://openrouter.ai/api/v1",
             max_tokens=max_tokens, timeout=REQUEST_TIMEOUT_S, max_retries=1, streaming=streaming, **common,
         )
     if provider == "openai":
         from langchain_openai import ChatOpenAI
         return ChatOpenAI(
-            model=name, api_key=os.getenv("OPENAI_API_KEY"), max_tokens=max_tokens,
+            model=name, api_key=llm_keys.get_key("openai"), max_tokens=max_tokens,
             timeout=REQUEST_TIMEOUT_S, max_retries=1, streaming=streaming, **common,
         )
     if provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
         return ChatAnthropic(
-            model=name, api_key=os.getenv("ANTHROPIC_API_KEY"), max_tokens=max_tokens or 1024,
+            model=name, api_key=llm_keys.get_key("anthropic"), max_tokens=max_tokens or 1024,
             timeout=REQUEST_TIMEOUT_S, max_retries=1, streaming=streaming, **common,
         )
     if provider == "google":
         from langchain_google_genai import ChatGoogleGenerativeAI
         return ChatGoogleGenerativeAI(
-            model=name, google_api_key=os.getenv("GEMINI_API_KEY"), max_output_tokens=max_tokens,
+            model=name, google_api_key=llm_keys.get_key("google"), max_output_tokens=max_tokens,
             timeout=REQUEST_TIMEOUT_S, max_retries=1, **common,
         )
     raise ValueError(f"Unsupported provider: {provider}")
@@ -123,7 +116,7 @@ def _build_chat_model(provider: str, name: str, temperature: float, max_tokens: 
 def model_chain(config=None, preferred: Optional[Dict[str, str]] = None) -> List[Dict[str, str]]:
     """Ordered, de-duplicated [{provider, name}] list: the requested model first,
     then the project's primary and fallback models. Providers without an API
-    key configured are skipped (unless nothing else is available)."""
+    key in the current workspace are skipped (unless nothing else is available)."""
     from app.models.rag import DEFAULT_FALLBACK_MODELS, DEFAULT_PRIMARY_MODELS
     candidates: List[Dict[str, str]] = []
     if preferred and preferred.get("name"):
@@ -149,6 +142,9 @@ def model_chain(config=None, preferred: Optional[Dict[str, str]] = None) -> List
 def build_with_fallbacks(chain: List[Dict[str, str]], temperature: float = 0.2, max_tokens: Optional[int] = None, max_models: int = 4, fast: bool = False):
     """A runnable that tries each model in order on any error (429, timeout, 5xx,
     decommissioned model...). Returns (runnable, primary_spec)."""
+    chain = [spec for spec in chain if provider_available(spec["provider"])]
+    if not chain:
+        raise llm_keys.MissingLLMKeys()
     models = []
     for spec in chain[:max_models]:
         try:
@@ -156,7 +152,7 @@ def build_with_fallbacks(chain: List[Dict[str, str]], temperature: float = 0.2, 
         except Exception as exc:
             logger.warning("Skipping model %s/%s: %s", spec["provider"], spec["name"], exc)
     if not models:
-        raise RuntimeError("No usable LLM configured. Set GROQ_API_KEY, GEMINI_API_KEY or OPENROUTER_API_KEY.")
+        raise llm_keys.MissingLLMKeys()
     primary = models[0]
     return (primary.with_fallbacks(models[1:]) if len(models) > 1 else primary), chain[0]
 
@@ -188,7 +184,8 @@ def token_usage(message: Any) -> Optional[Dict[str, int]]:
 # Live model catalog (so the UI never offers a decommissioned model)
 # ---------------------------------------------------------------------------
 
-_catalog_cache: Dict[str, Any] = {"at": 0.0, "data": None}
+# Per key set: workspaces with different keys see different model lists.
+_catalog_cache: Dict[str, Dict[str, Any]] = {}
 _STATIC_CATALOG = {
     "groq": ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b"],
     "google": ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.1-flash-lite"],
@@ -198,14 +195,16 @@ _EXCLUDE = ("whisper", "orpheus", "tts", "audio", "image", "guard", "embedding",
 
 
 def model_catalog(ttl_seconds: int = 3600) -> Dict[str, List[str]]:
-    if _catalog_cache["data"] and time.time() - _catalog_cache["at"] < ttl_seconds:
-        return _catalog_cache["data"]
+    fp = llm_keys.fingerprint()
+    cached = _catalog_cache.get(fp)
+    if cached and time.time() - cached["at"] < ttl_seconds:
+        return cached["data"]
     import httpx
     catalog: Dict[str, List[str]] = {}
     try:
         if provider_available("groq"):
             r = httpx.get("https://api.groq.com/openai/v1/models",
-                          headers={"Authorization": f"Bearer {os.getenv('GROQ_API_KEY')}"}, timeout=10)
+                          headers={"Authorization": f"Bearer {llm_keys.get_key('groq')}"}, timeout=10)
             r.raise_for_status()
             catalog["groq"] = sorted(m["id"] for m in r.json().get("data", []) if not any(x in m["id"] for x in _EXCLUDE))
     except Exception as exc:
@@ -213,7 +212,7 @@ def model_catalog(ttl_seconds: int = 3600) -> Dict[str, List[str]]:
     try:
         if provider_available("google"):
             r = httpx.get("https://generativelanguage.googleapis.com/v1beta/models",
-                          params={"key": os.getenv("GEMINI_API_KEY"), "pageSize": 200}, timeout=10)
+                          params={"key": llm_keys.get_key("google"), "pageSize": 200}, timeout=10)
             r.raise_for_status()
             catalog["google"] = sorted(
                 m["name"].split("/")[-1] for m in r.json().get("models", [])
@@ -233,5 +232,7 @@ def model_catalog(ttl_seconds: int = 3600) -> Dict[str, List[str]]:
     for provider, models in _STATIC_CATALOG.items():
         if provider_available(provider) and not catalog.get(provider):
             catalog[provider] = models
-    _catalog_cache.update(at=time.time(), data=catalog)
+    if len(_catalog_cache) > 512:
+        _catalog_cache.clear()
+    _catalog_cache[fp] = {"at": time.time(), "data": catalog}
     return catalog

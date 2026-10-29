@@ -10,6 +10,7 @@ from app.core.config import settings
 
 # Import models so SQLModel metadata registers all tables before create_all
 from app.models.user import User  # noqa: F401
+from app.models.workspace import Workspace, WorkspaceInvite  # noqa: F401
 from app.models.rag import (  # noqa: F401
     Project, ProjectMember, RAGConfig, Document, Chunk, ChunkEmbedding,
     IngestionJob, SemanticCacheEntry, ProjectApiKey, ExternalDatabase,
@@ -138,10 +139,31 @@ def _m003_queue_embedding_backfill(conn) -> None:
         ), {"p": project_id, "now": now})
 
 
+def _m004_default_workspace(conn) -> None:
+    """Before workspaces existed every user and project shared one global space.
+    Move all of it into a single workspace owned by the first admin; it keeps
+    using the server's own LLM keys, exactly as before."""
+    has_users = conn.execute(text("SELECT 1 FROM \"user\" LIMIT 1")).fetchone()
+    has_projects = conn.execute(text("SELECT 1 FROM project LIMIT 1")).fetchone()
+    if not has_users and not has_projects:
+        return
+    owner = conn.execute(text(
+        "SELECT id FROM \"user\" WHERE LOWER(CAST(role AS VARCHAR)) = 'admin' ORDER BY id LIMIT 1"
+    )).fetchone()
+    conn.execute(text(
+        "INSERT INTO workspace (name, owner_id, is_demo, uses_platform_keys, created_at) "
+        "VALUES ('Main workspace', :owner, :f, :t, :now)"
+    ), {"owner": owner[0] if owner else None, "f": False, "t": True, "now": datetime.utcnow()})
+    ws_id = conn.execute(text("SELECT MAX(id) FROM workspace")).scalar()
+    conn.execute(text("UPDATE \"user\" SET workspace_id = :w WHERE workspace_id IS NULL"), {"w": ws_id})
+    conn.execute(text("UPDATE project SET workspace_id = :w WHERE workspace_id IS NULL"), {"w": ws_id})
+
+
 MIGRATIONS: List[Tuple[str, Callable]] = [
     ("001_retired_models", _m001_retired_models),
     ("002_embedding_model_name", _m002_embedding_model_name),
     ("003_queue_embedding_backfill", _m003_queue_embedding_backfill),
+    ("004_default_workspace", _m004_default_workspace),
 ]
 
 

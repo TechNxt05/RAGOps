@@ -17,6 +17,7 @@ from typing import Callable, Dict, List, Optional
 from sqlalchemy import text
 from sqlmodel import Session, select
 
+from app.core import llm_keys
 from app.core.config import settings
 from app.db import IS_POSTGRES, engine
 from app.models.rag import IngestionJob
@@ -77,6 +78,16 @@ def _claim_next() -> Optional[int]:
         return int(row[0]) if updated.rowcount else None
 
 
+def _job_project_id(session: Session, job: IngestionJob) -> Optional[int]:
+    if job.project_id:
+        return job.project_id
+    if job.document_id:
+        from app.models.rag import Document
+        doc = session.get(Document, job.document_id)
+        return doc.project_id if doc else None
+    return None
+
+
 def run_job(job_id: int) -> None:
     with Session(engine) as session:
         job = session.get(IngestionJob, job_id)
@@ -86,7 +97,9 @@ def run_job(job_id: int) -> None:
         try:
             if fn is None:
                 raise RuntimeError(f"No handler for job kind '{job.kind}'")
-            fn(session, job)
+            # LLM calls made while indexing use the owning workspace's keys.
+            with llm_keys.scope(llm_keys.scope_for_project(session, _job_project_id(session, job))):
+                fn(session, job)
             job = session.get(IngestionJob, job_id)
             job.status = "done"
             job.error = None

@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 from starlette.concurrency import run_in_threadpool
 
-from app.auth.access import can_write_project, require_project
+from app.auth.access import can_write_project, require_not_demo_project, require_project
 from app.auth.deps import get_current_user
 from app.core.config import settings
 from app.core.rate_limit import rate_limiter
@@ -96,7 +96,8 @@ def list_databases(project_id: int, session: Session = Depends(get_session), use
 
 @router.post("")
 async def add_database(project_id: int, body: DatabaseCreate, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
-    require_project(session, user, project_id, write=True)
+    project = require_project(session, user, project_id, write=True)
+    require_not_demo_project(session, project, "Connecting databases")
     if not settings.secret_key_configured:
         raise HTTPException(status_code=400, detail="Set SECRET_KEY on the server before connecting databases.")
 

@@ -44,6 +44,10 @@ def get_document_chunks(
 ):
     if current_user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin access required")
+    doc = session.get(Document, document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    require_project(session, current_user, doc.project_id)
 
     chunks = session.exec(select(Chunk).where(Chunk.document_id == document_id).order_by(Chunk.chunk_index, Chunk.id)).all()
     # Simple estimation for tokens if not stored: chars / 4

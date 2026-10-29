@@ -8,6 +8,7 @@ interface User {
     id: number;
     email: string;
     role: 'admin' | 'client';
+    workspace: { id: number; name: string; is_demo: boolean } | null;
 }
 
 interface AuthContextType {

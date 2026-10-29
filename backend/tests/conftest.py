@@ -114,11 +114,19 @@ def admin(app_client):
     return _login(app_client, "admin@test.io")
 
 
+def join_with_invite(client, admin_headers, email, project_ids=(), password="password123"):
+    """Invite `email` into the admin's workspace and register through the link."""
+    r = client.post("/workspace/invites", json={"email": email, "project_ids": list(project_ids)}, headers=admin_headers)
+    assert r.status_code == 200, r.text
+    r = client.post("/auth/register", json={"email": email, "password": password, "invite_token": r.json()["token"],
+                                             "role": "admin"})
+    assert r.status_code == 200 and r.json()["joined_existing_workspace"], r.text
+    return _login(client, email, password)
+
+
 @pytest.fixture(scope="session")
 def employee(app_client, admin):
-    r = app_client.post("/auth/register", json={"email": "emp@test.io", "password": "password123", "role": "admin"})
-    assert r.status_code == 200
-    return _login(app_client, "emp@test.io")
+    return join_with_invite(app_client, admin, "emp@test.io")
 
 
 @pytest.fixture(scope="session")

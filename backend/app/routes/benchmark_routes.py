@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session
 
 from app.db import get_session
+from app.auth.access import require_not_demo_project, require_project
 from app.auth.deps import get_current_admin, get_current_user
 from app.models.user import User
 from app.benchmark.variants import PipelineVariant, list_variants, get_variant_config
@@ -205,13 +206,22 @@ async def _run_benchmark_job_async(job_id: str, req: BenchmarkStartRequest):
         job["error"] = str(exc)
 
 
+def _own_job(job_id: str, user: User) -> Optional[Dict[str, Any]]:
+    job = BENCHMARK_JOBS.get(job_id)
+    return job if job and job.get("workspace_id") == user.workspace_id else None
+
+
 @router.post("/start")
 async def start_benchmark(
     req: BenchmarkStartRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_admin),
+    session: Session = Depends(get_session),
 ):
     """Starts an asynchronous AutoRAGBench evaluation run."""
+    project = require_project(session, current_user, req.project_id)
+    # A benchmark makes hundreds of LLM calls: never on the shared demo keys.
+    require_not_demo_project(session, project, "AutoRAGBench")
     job_id = str(uuid.uuid4())
     profile = get_profile_by_id(req.model_profile_id)
     
@@ -220,6 +230,7 @@ async def start_benchmark(
 
     BENCHMARK_JOBS[job_id] = {
         "job_id": job_id,
+        "workspace_id": current_user.workspace_id,
         "project_id": req.project_id,
         "model_id": profile.id,
         "model_name": profile.name,
@@ -250,9 +261,9 @@ async def start_benchmark(
 
 
 @router.get("/status/{job_id}")
-def get_benchmark_status(job_id: str, _: User = Depends(get_current_user)):
+def get_benchmark_status(job_id: str, current_user: User = Depends(get_current_user)):
     """Poll live progress and recent activity for a running benchmark."""
-    job = BENCHMARK_JOBS.get(job_id)
+    job = _own_job(job_id, current_user)
     if not job:
         raise HTTPException(status_code=404, detail="Benchmark job not found.")
 
@@ -273,9 +284,9 @@ def get_benchmark_status(job_id: str, _: User = Depends(get_current_user)):
 
 
 @router.get("/results/{job_id}")
-def get_benchmark_results(job_id: str, _: User = Depends(get_current_user)):
+def get_benchmark_results(job_id: str, current_user: User = Depends(get_current_user)):
     """Retrieve full evaluation metrics, leaderboard, and summaries for a completed job."""
-    job = BENCHMARK_JOBS.get(job_id)
+    job = _own_job(job_id, current_user)
     if not job:
         raise HTTPException(status_code=404, detail="Benchmark job not found.")
 
@@ -301,7 +312,7 @@ def get_benchmark_results(job_id: str, _: User = Depends(get_current_user)):
 @router.post("/cancel/{job_id}")
 def cancel_benchmark(job_id: str, current_user: User = Depends(get_current_admin)):
     """Cancels an active benchmark run."""
-    job = BENCHMARK_JOBS.get(job_id)
+    job = _own_job(job_id, current_user)
     if not job:
         raise HTTPException(status_code=404, detail="Benchmark job not found.")
 
@@ -311,11 +322,13 @@ def cancel_benchmark(job_id: str, current_user: User = Depends(get_current_admin
 
 
 @router.get("/history")
-def get_benchmark_history(_: User = Depends(get_current_user)):
+def get_benchmark_history(current_user: User = Depends(get_current_user)):
     """Lists past benchmark report files and cached results."""
     history = []
     # Check in-memory jobs
     for j_id, j_data in BENCHMARK_JOBS.items():
+        if j_data.get("workspace_id") != current_user.workspace_id:
+            continue
         if j_data.get("status") in ("completed", "failed"):
             history.append({
                 "job_id": j_id,

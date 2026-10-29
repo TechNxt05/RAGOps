@@ -260,7 +260,9 @@ To ensure the **User Experience is never hampered** by provider rate limits ($42
 * **Streaming chat** with numbered citations, relevance scores, a calibrated confidence gate and real time-to-first-token metrics.
 * **Ask your database**: a manager connects a PostgreSQL/MySQL database and chooses which tables to expose; employees ask questions in plain language. Read-only sessions, SQL AST validation, table allow-list, SSRF protection, timeouts and row limits.
 * **MCP server**: `/mcp/` (Streamable HTTP) with per-project API keys, so Claude Desktop, Claude Code, Cursor or any MCP client can use a project's documents and databases.
-* **Access control**: admins/managers, project visibility (everyone vs members only), viewer/editor members.
+* **Workspaces (multi-tenant)**: anyone can create a workspace and becomes its admin. Each workspace brings its own LLM API keys (Groq / Gemini / OpenRouter, encrypted at rest) and never sees another workspace's projects, people, analytics or keys. Admins invite clients with one-time links and tick which projects each client can open (e.g. Sales sees only the Sales project).
+* **Public demo**: optional one-click "Demo admin" / "Demo client" logins (`DEMO_MODE=1`) into a shared, restricted sandbox that runs on the server's keys and resets daily.
+* **Access control**: workspace admins and clients, project visibility (assigned members vs whole workspace), viewer/editor members.
 * **Observability**: real per-request execution traces and phase timings (`/executions`), analytics, AutoRAGBench.
 * **Tests & CI**: `backend/tests` (runs on SQLite or Postgres+pgvector) and a GitHub Actions workflow.
 
